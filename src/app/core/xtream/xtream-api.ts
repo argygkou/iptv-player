@@ -3,14 +3,15 @@ import { invoke } from '@tauri-apps/api/core';
 
 import { toProgramme } from './epg';
 import {
-  AccountInfo,
   Category,
   Credentials,
   LiveStream,
+  Profile,
   Programme,
   SeriesInfo,
   SeriesItem,
   ShortEpgResponse,
+  SignedIn,
   StreamKind,
   VodInfo,
   VodStream,
@@ -44,9 +45,28 @@ interface Query {
 export class XtreamApi {
   private readonly cache = new Map<string, Promise<unknown>>();
 
-  async login(credentials: Credentials): Promise<AccountInfo> {
+  login(credentials: Credentials, remember: boolean): Promise<SignedIn> {
     this.cache.clear();
-    return invoke<AccountInfo>('login', { ...credentials });
+    return invoke<SignedIn>('login', { ...credentials, remember });
+  }
+
+  /** Signs in with the profile used last; `null` when none is saved. */
+  restoreSession(): Promise<SignedIn | null> {
+    this.cache.clear();
+    return invoke<SignedIn | null>('restore_session');
+  }
+
+  signInProfile(id: string): Promise<SignedIn> {
+    this.cache.clear();
+    return invoke<SignedIn>('sign_in_profile', { id });
+  }
+
+  listProfiles(): Promise<Profile[]> {
+    return invoke<Profile[]>('list_profiles');
+  }
+
+  removeProfile(id: string): Promise<void> {
+    return invoke('remove_profile', { id });
   }
 
   async logout(): Promise<void> {

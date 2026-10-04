@@ -164,7 +164,12 @@ mod tests {
 
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
-        let state = Arc::new(AppState::new(listener.local_addr().unwrap().port()));
+        let data_dir =
+            std::env::temp_dir().join(format!("iptv-proxy-{}", crate::state::random_hex(6)));
+        let state = Arc::new(AppState::new(
+            listener.local_addr().unwrap().port(),
+            data_dir,
+        ));
         *state.session.write().await =
             Some(Credentials::new(&upstream_addr.to_string(), "user", "secret").unwrap());
         tokio::spawn(serve(listener, state.clone()));

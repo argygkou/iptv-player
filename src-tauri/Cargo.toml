@@ -29,5 +29,11 @@ axum = "0.8"
 futures-util = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "gzip"] }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

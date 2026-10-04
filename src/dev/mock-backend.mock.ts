@@ -108,21 +108,81 @@ const series = seriesCategories.flatMap((c, ci) =>
   })),
 );
 
+const PROFILES_KEY = 'iptv.mock.profiles';
+interface MockProfiles {
+  activeProfileId: string | null;
+  profiles: { id: string; name: string; server: string; username: string }[];
+}
+const loadProfiles = (): MockProfiles =>
+  JSON.parse(localStorage.getItem(PROFILES_KEY) ?? 'null') ?? {
+    activeProfileId: null,
+    profiles: [],
+  };
+const saveProfiles = (data: MockProfiles) =>
+  localStorage.setItem(PROFILES_KEY, JSON.stringify(data));
+
+const account = (username: string) => ({
+  user_info: {
+    username,
+    status: 'Active',
+    exp_date: String(now + 86400 * 120),
+    is_trial: '0',
+    active_cons: '0',
+    max_connections: '2',
+    allowed_output_formats: ['ts', 'm3u8'],
+  },
+  server_info: { url: 'mock', port: '80', timezone: 'UTC', time_now: '' },
+});
+
+const signInSaved = (id: string) => {
+  const data = loadProfiles();
+  const profile = data.profiles.find((p) => p.id === id);
+  if (!profile) {
+    throw 'Unknown profile';
+  }
+  saveProfiles({ ...data, activeProfileId: id });
+  return { account: account(profile.username), profile };
+};
+
 type Args = Record<string, any>;
 const handlers: Record<string, (args: Args) => unknown> = {
-  login: ({ username }) => ({
-    user_info: {
-      username,
-      status: 'Active',
-      exp_date: String(now + 86400 * 120),
-      is_trial: '0',
-      active_cons: '0',
-      max_connections: '2',
-      allowed_output_formats: ['ts', 'm3u8'],
-    },
-    server_info: { url: 'mock', port: '80', timezone: 'UTC', time_now: '' },
-  }),
-  logout: () => null,
+  login: ({ server, username, remember }) => {
+    const data = loadProfiles();
+    if (!remember) {
+      saveProfiles({ ...data, activeProfileId: null });
+      return { account: account(username), profile: null };
+    }
+    let profile = data.profiles.find((p) => p.server === server && p.username === username);
+    if (!profile) {
+      profile = {
+        id: Math.random().toString(16).slice(2),
+        name: `${username}@${server}`,
+        server,
+        username,
+      };
+      data.profiles.push(profile);
+    }
+    saveProfiles({ ...data, activeProfileId: profile.id });
+    return { account: account(username), profile };
+  },
+  restore_session: () => {
+    const { activeProfileId } = loadProfiles();
+    return activeProfileId ? signInSaved(activeProfileId) : null;
+  },
+  sign_in_profile: ({ id }) => signInSaved(id),
+  list_profiles: () => loadProfiles().profiles,
+  remove_profile: ({ id }) => {
+    const data = loadProfiles();
+    saveProfiles({
+      activeProfileId: data.activeProfileId === id ? null : data.activeProfileId,
+      profiles: data.profiles.filter((p) => p.id !== id),
+    });
+    return null;
+  },
+  logout: () => {
+    saveProfiles({ ...loadProfiles(), activeProfileId: null });
+    return null;
+  },
   stream_url: () => SAMPLE_VIDEO,
   xtream: ({ action, query = {} }) => {
     const byCategory = <T extends { category_id: string }>(list: T[]) =>

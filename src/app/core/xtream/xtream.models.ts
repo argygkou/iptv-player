@@ -32,6 +32,20 @@ export interface AccountInfo {
   };
 }
 
+/** A saved provider account; the password is kept by the backend. */
+export interface Profile {
+  id: string;
+  name: string;
+  server: string;
+  username: string;
+}
+
+export interface SignedIn {
+  account: AccountInfo;
+  /** Present when the account was saved to stay signed in. */
+  profile: Profile | null;
+}
+
 export interface Category {
   category_id: string;
   category_name: string;

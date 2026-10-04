@@ -7,7 +7,8 @@ Windows is the first target; Linux and iOS are planned (see [Roadmap](#roadmap))
 
 ## Features
 
-- Sign in with Xtream Codes credentials; server and username can be remembered.
+- Sign in with Xtream Codes credentials. "Keep me signed in" saves the account as a profile, so the next launch
+  opens straight on Live TV. Several accounts can be saved and picked on the sign-in screen.
 - **Live TV**: categories, channel search, MPEG-TS playback through mpegts.js, now/next EPG with progress.
 - **TV Guide**: a timeline grid per category (six hours around now); click a channel to watch it.
 - **Movies**: category browser, poster grid with search and incremental rendering, details and playback.
@@ -29,7 +30,12 @@ src-tauri/                   Rust backend
 
 **Why the provider is called from Rust.** Xtream panels are usually plain `http://` and send no CORS headers,
 so the webview cannot call them directly. Every API call goes through a Tauri command instead, and the
-password never leaves the Rust process (it is kept in memory for the current run only).
+password never reaches the webview.
+
+**Saved profiles.** `profiles.json` in the app data directory lists saved accounts (no passwords) and which one
+to restore on launch. Passwords go to Windows Credential Manager (Keychain on macOS). Linux has no store that works
+everywhere, WSL included, so it uses an owner-only (`0600`) `secrets.json` next to the profiles. Signing out keeps
+the profile for one-click sign-in but stops auto sign-in; the ✕ on the sign-in screen deletes it and its password.
 
 **Why there is a local relay.** The same restrictions apply to media: mpegts.js needs to `fetch()` the
 live stream, and an https app origin would block `http://` media entirely. The backend starts a small axum
@@ -84,13 +90,12 @@ installer with a code-signing certificate. See the
 
 - Playback uses the webview's own decoders. MP4/H.264/AAC and live MPEG-TS work; many movie files are MKV with
   AC3/DTS audio or HEVC video, which WebView2 cannot decode. The player shows an error for those.
-- The password is not persisted between runs.
 - The guide loads short EPG for the first 60 channels of a category.
 
 ## Roadmap
 
 1. Native playback through **libmpv** for full container and codec support (MKV, HEVC, AC3/DTS, subtitles).
-2. Store credentials in the OS keychain (Windows Credential Manager) and support multiple profiles.
+2. Per-profile settings (favourites, history) and Secret Service support on Linux desktops.
 3. Favourites, recently watched, resume position for movies and episodes.
 4. Full XMLTV EPG (`xmltv.php`) with a local cache, and catch-up for channels with `tv_archive`.
 5. Microsoft Store submission and auto-updates for the direct download.

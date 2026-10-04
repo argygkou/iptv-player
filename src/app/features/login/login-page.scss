@@ -8,7 +8,7 @@
 .card {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
   width: min(420px, 90vw);
   padding: 2rem;
   border: 1px solid var(--border);
@@ -16,8 +16,90 @@
   background: var(--surface);
 }
 
-h1 {
+h1,
+h2 {
   margin: 0;
+}
+
+h2 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+form,
+.profiles {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.profiles ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.profiles li {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.profile {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  text-align: left;
+}
+
+.avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  small {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text-muted);
+  }
+}
+
+.remove {
+  padding: 0 0.75rem;
+  color: var(--text-muted);
+}
+
+.link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+
+  &:hover:not(:disabled) {
+    background: none;
+    text-decoration: underline;
+  }
 }
 
 .hint {

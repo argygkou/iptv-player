@@ -2,7 +2,8 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 
-import { SessionStore } from '../../core/session/session-store';
+import { describeError, SessionStore } from '../../core/session/session-store';
+import { Profile } from '../../core/xtream/xtream.models';
 
 @Component({
   selector: 'app-login-page',
@@ -12,32 +13,51 @@ import { SessionStore } from '../../core/session/session-store';
   styleUrl: './login-page.scss',
 })
 export class LoginPage {
-  private readonly session = inject(SessionStore);
+  protected readonly session = inject(SessionStore);
   private readonly router = inject(Router);
-  private readonly remembered = this.session.rememberedLogin();
 
   protected readonly form = inject(NonNullableFormBuilder).group({
-    server: [this.remembered?.server ?? '', Validators.required],
-    username: [this.remembered?.username ?? '', Validators.required],
+    server: ['', Validators.required],
+    username: ['', Validators.required],
     password: ['', Validators.required],
-    remember: [this.remembered !== null],
+    remember: [true],
   });
   protected readonly pending = signal(false);
-  protected readonly error = signal<string | null>(null);
+  protected readonly error = signal<string | null>(this.session.restoreError());
+  /** Show the form straight away only when there is no saved account to pick. */
+  protected readonly showForm = signal(this.session.profiles().length === 0);
 
-  protected async submit(): Promise<void> {
-    if (this.form.invalid || this.pending()) {
+  protected submit(): Promise<void> {
+    if (this.form.invalid) {
       this.form.markAllAsTouched();
-      return;
+      return Promise.resolve();
     }
     const { remember, ...credentials } = this.form.getRawValue();
+    return this.run(() => this.session.signIn(credentials, remember));
+  }
+
+  protected continueAs(profile: Profile): Promise<void> {
+    return this.run(() => this.session.signInWithProfile(profile.id));
+  }
+
+  protected async remove(profile: Profile): Promise<void> {
+    await this.session.removeProfile(profile.id);
+    if (this.session.profiles().length === 0) {
+      this.showForm.set(true);
+    }
+  }
+
+  private async run(signIn: () => Promise<void>): Promise<void> {
+    if (this.pending()) {
+      return;
+    }
     this.pending.set(true);
     this.error.set(null);
     try {
-      await this.session.signIn(credentials, remember);
+      await signIn();
       await this.router.navigateByUrl('/live');
     } catch (err) {
-      this.error.set(typeof err === 'string' ? err : 'Could not reach the provider.');
+      this.error.set(describeError(err));
     } finally {
       this.pending.set(false);
     }

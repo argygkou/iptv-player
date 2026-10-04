@@ -14,6 +14,18 @@ pub enum AppError {
     Http(#[from] reqwest::Error),
     #[error("Unexpected response from provider: {0}")]
     Decode(#[from] serde_json::Error),
+    #[error("Unknown profile")]
+    UnknownProfile,
+    #[error("The saved password for this profile is missing")]
+    MissingSecret,
+    #[error("Could not save app data: {0}")]
+    Storage(String),
+}
+
+impl From<std::io::Error> for AppError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Storage(err.to_string())
+    }
 }
 
 /// Commands return errors to the webview as plain strings.
