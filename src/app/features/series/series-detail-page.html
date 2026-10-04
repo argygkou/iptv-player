@@ -1,0 +1,64 @@
+<button type="button" class="back" (click)="location.back()">← Back</button>
+
+@if (details.hasValue()) {
+  @let show = details.value().info;
+
+  @if (playing(); as current) {
+    <app-video-player [src]="current.url" />
+    <h2>
+      S{{ current.episode.season }}E{{ current.episode.episode_num }} · {{ current.episode.title }}
+    </h2>
+  } @else {
+    <div class="hero">
+      @if (show.cover) {
+        <img class="cover" [src]="show.cover" alt="" />
+      }
+      <div class="meta">
+        <h1>{{ show.name }}</h1>
+        <p class="facts">{{ show.releaseDate }} · {{ show.genre }}</p>
+        <p>{{ show.plot }}</p>
+        @if (show.cast) {
+          <p class="facts">Cast: {{ show.cast }}</p>
+        }
+      </div>
+    </div>
+  }
+
+  @if (playError(); as error) {
+    <p class="error">{{ error }}</p>
+  }
+
+  <div class="seasons" role="tablist">
+    @for (key of seasonKeys(); track key) {
+      <button type="button" role="tab" [class.active]="season() === key" (click)="season.set(key)">
+        Season {{ key }}
+      </button>
+    }
+  </div>
+
+  <ol class="episodes">
+    @for (episode of episodes(); track episode.id) {
+      <li>
+        <button
+          type="button"
+          (click)="play(episode)"
+          [class.active]="playing()?.episode?.id === episode.id"
+        >
+          @if (episode.info?.movie_image; as image) {
+            <img [src]="image" alt="" loading="lazy" />
+          }
+          <span class="title">
+            <strong>{{ episode.episode_num }}. {{ episode.title }}</strong>
+            @if (episode.info?.duration; as duration) {
+              <small>{{ duration }}</small>
+            }
+          </span>
+        </button>
+      </li>
+    }
+  </ol>
+} @else if (details.error()) {
+  <p class="error">{{ details.error() }}</p>
+} @else {
+  <p class="status">Loading…</p>
+}

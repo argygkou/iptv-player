@@ -1,0 +1,77 @@
+<div class="card">
+  <h1>IPTV Player</h1>
+
+  @if (error(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+
+  @if (session.profiles().length > 0) {
+    <section class="profiles">
+      <h2>Saved accounts</h2>
+      <ul>
+        @for (profile of session.profiles(); track profile.id) {
+          <li>
+            <button
+              type="button"
+              class="profile"
+              [disabled]="pending()"
+              (click)="continueAs(profile)"
+            >
+              <span class="avatar" aria-hidden="true">{{
+                profile.username.charAt(0).toUpperCase()
+              }}</span>
+              <span class="who">
+                <strong>{{ profile.username }}</strong>
+                <small>{{ profile.server }}</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              class="remove"
+              [disabled]="pending()"
+              [attr.aria-label]="'Remove ' + profile.name"
+              title="Remove saved account"
+              (click)="remove(profile)"
+            >
+              ✕
+            </button>
+          </li>
+        }
+      </ul>
+      @if (!showForm()) {
+        <button type="button" class="link" (click)="showForm.set(true)">Add another account</button>
+      }
+    </section>
+  }
+
+  @if (showForm()) {
+    <form [formGroup]="form" (ngSubmit)="submit()">
+      <p class="hint">Sign in with the Xtream Codes details from your provider.</p>
+
+      <label>
+        Server URL
+        <input
+          formControlName="server"
+          placeholder="http://provider.example:8080"
+          autocomplete="url"
+        />
+      </label>
+      <label>
+        Username
+        <input formControlName="username" autocomplete="username" />
+      </label>
+      <label>
+        Password
+        <input formControlName="password" type="password" autocomplete="current-password" />
+      </label>
+      <label class="checkbox">
+        <input formControlName="remember" type="checkbox" />
+        Keep me signed in
+      </label>
+
+      <button class="primary" type="submit" [disabled]="pending()">
+        {{ pending() ? 'Signing in…' : 'Sign in' }}
+      </button>
+    </form>
+  }
+</div>

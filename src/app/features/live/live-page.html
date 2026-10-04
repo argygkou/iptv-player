@@ -1,0 +1,77 @@
+<app-category-list
+  [categories]="categories.hasValue() ? categories.value() : []"
+  [selected]="category() ?? null"
+  (selectedChange)="selectCategory($event)"
+/>
+
+<section class="content channels">
+  <div class="toolbar">
+    <input
+      type="search"
+      placeholder="Search channels"
+      [value]="search()"
+      (input)="search.set($any($event.target).value)"
+    />
+    <span class="count">{{ visibleStreams().length }}</span>
+  </div>
+  <ul class="scroll">
+    @if (streams.isLoading()) {
+      <li class="status">Loading channels…</li>
+    } @else if (streams.error()) {
+      <li class="status error">{{ streams.error() }}</li>
+    }
+    @for (stream of visibleStreams(); track stream.stream_id) {
+      <li>
+        <button
+          type="button"
+          [class.active]="channel() === channelId(stream)"
+          (click)="selectChannel(stream)"
+        >
+          @if (stream.stream_icon) {
+            <img [src]="stream.stream_icon" alt="" loading="lazy" />
+          } @else {
+            <span class="logo-placeholder"></span>
+          }
+          <span class="name">{{ stream.name }}</span>
+        </button>
+      </li>
+    }
+  </ul>
+</section>
+
+<section class="content now-playing">
+  @if (playback.hasValue()) {
+    <app-video-player [src]="playback.value()" [live]="true" />
+  } @else {
+    <div class="idle">
+      @if (playback.error()) {
+        <p class="error">{{ playback.error() }}</p>
+      } @else {
+        <p>Select a channel to start watching.</p>
+      }
+    </div>
+  }
+
+  @if (selected(); as stream) {
+    <h2>{{ stream.name }}</h2>
+  }
+
+  @if (epg.hasValue()) {
+    <ol class="epg scroll">
+      @for (programme of epg.value(); track programme.start.getTime()) {
+        <li [class.airing]="isAiring(programme)">
+          <time>{{ programme.start | date: 'HH:mm' }} – {{ programme.end | date: 'HH:mm' }}</time>
+          <strong>{{ programme.title }}</strong>
+          @if (isAiring(programme)) {
+            <progress [value]="progress(programme)" max="1"></progress>
+          }
+          @if (programme.description) {
+            <p>{{ programme.description }}</p>
+          }
+        </li>
+      } @empty {
+        <li class="status">No guide data for this channel.</li>
+      }
+    </ol>
+  }
+</section>
