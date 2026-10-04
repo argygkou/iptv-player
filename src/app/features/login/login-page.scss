@@ -1,0 +1,43 @@
+:host {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  background: radial-gradient(circle at top, var(--accent-soft), transparent 60%);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: min(420px, 90vw);
+  padding: 2rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 2);
+  background: var(--surface);
+}
+
+h1 {
+  margin: 0;
+}
+
+.hint {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.checkbox {
+  flex-direction: row;
+  align-items: center;
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+}

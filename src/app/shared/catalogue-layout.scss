@@ -1,0 +1,45 @@
+// Shared layout for pages with a category sidebar and a scrollable content column.
+:host {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  height: 100%;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+
+  input {
+    flex: 1;
+    max-width: 360px;
+  }
+
+  .count {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+}
+
+.scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.status {
+  padding: 1rem;
+  color: var(--text-muted);
+}
+
+.status.error {
+  color: var(--danger);
+}

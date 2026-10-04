@@ -1,0 +1,29 @@
+<form class="card" [formGroup]="form" (ngSubmit)="submit()">
+  <h1>IPTV Player</h1>
+  <p class="hint">Sign in with the Xtream Codes details from your provider.</p>
+
+  <label>
+    Server URL
+    <input formControlName="server" placeholder="http://provider.example:8080" autocomplete="url" />
+  </label>
+  <label>
+    Username
+    <input formControlName="username" autocomplete="username" />
+  </label>
+  <label>
+    Password
+    <input formControlName="password" type="password" autocomplete="current-password" />
+  </label>
+  <label class="checkbox">
+    <input formControlName="remember" type="checkbox" />
+    Remember server and username
+  </label>
+
+  @if (error(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+
+  <button class="primary" type="submit" [disabled]="pending()">
+    {{ pending() ? 'Signing in…' : 'Sign in' }}
+  </button>
+</form>

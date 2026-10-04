@@ -1,0 +1,29 @@
+<nav>
+  <div class="brand">IPTV</div>
+  @for (section of sections; track section.path) {
+    <a [routerLink]="section.path" routerLinkActive="active">
+      <span aria-hidden="true">{{ section.icon }}</span>
+      {{ section.label }}
+    </a>
+  }
+  <footer>
+    @if (session.account(); as account) {
+      <div class="account">
+        <strong>{{ account.user_info.username }}</strong>
+        @if (session.expiresAt(); as expires) {
+          <span>Expires {{ expires | date: 'mediumDate' }}</span>
+        }
+        <span
+          >{{ account.user_info.active_cons }}/{{
+            account.user_info.max_connections
+          }}
+          connections</span
+        >
+      </div>
+    }
+    <button type="button" (click)="signOut()">Sign out</button>
+  </footer>
+</nav>
+<main>
+  <router-outlet />
+</main>
