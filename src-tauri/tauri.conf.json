@@ -1,10 +1,10 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "IPTV Player",
+  "productName": "Infinite IPTV",
   "version": "0.1.0",
-  "identifier": "com.argygkou.iptvplayer",
+  "identifier": "com.argygkou.infiniteiptv",
   "build": {
-    "frontendDist": "../dist/iptv-player/browser",
+    "frontendDist": "../dist/infinite-iptv/browser",
     "devUrl": "http://localhost:4200",
     "beforeDevCommand": "npm run start",
     "beforeBuildCommand": "npm run build"
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "IPTV Player",
+        "title": "Infinite IPTV",
         "width": 1366,
         "height": 820,
         "minWidth": 1024,

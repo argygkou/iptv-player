@@ -1,4 +1,4 @@
-# IPTV Player
+# Infinite IPTV
 
 A desktop IPTV player for providers that use **Xtream Codes** logins (server URL, username, password).
 Live TV with now/next, a TV guide grid, movies and series, built with **Tauri 2** (Rust) and **Angular 22**.
@@ -33,9 +33,8 @@ so the webview cannot call them directly. Every API call goes through a Tauri co
 password never reaches the webview.
 
 **Saved profiles.** `profiles.json` in the app data directory lists saved accounts (no passwords) and which one
-to restore on launch. Passwords go to Windows Credential Manager (Keychain on macOS). Linux has no store that works
-everywhere, WSL included, so it uses an owner-only (`0600`) `secrets.json` next to the profiles. Signing out keeps
-the profile for one-click sign-in but stops auto sign-in; the ✕ on the sign-in screen deletes it and its password.
+to restore on launch. Passwords go to Windows Credential Manager. Signing out keeps the profile for one-click
+sign-in but stops auto sign-in; the ✕ on the sign-in screen deletes it and its password.
 
 **Why there is a local relay.** The same restrictions apply to media: mpegts.js needs to `fetch()` the
 live stream, and an https app origin would block `http://` media entirely. The backend starts a small axum
@@ -45,35 +44,43 @@ local processes or web pages cannot use it.
 
 ## Development
 
-Prerequisites (Windows): [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) (Microsoft C++ Build
-Tools and WebView2, which ships with Windows 10/11), Rust stable, and Node.js 24 (Angular 22 needs >= 22.22.3).
+Development happens on Windows, in PowerShell. No WSL is needed.
 
-```bash
-npm ci
-npm run dev        # tauri dev: ng serve + the desktop window with hot reload
-npm test           # Angular unit tests (Vitest)
-npm run bundle     # release build: NSIS .exe and .msi under src-tauri/target/release/bundle
-cd src-tauri && cargo test
+### One-time setup
+
+Install the tools below, then open a new terminal so they are on `PATH`:
+
+```powershell
+winget install --id Git.Git -e
+winget install --id OpenJS.NodeJS -e        # Node.js 24 (Angular 22 needs >= 22.22.3)
+winget install --id Rustlang.Rustup -e      # Rust stable, MSVC toolchain
+winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--passive --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
 ```
+
+The last line installs the Microsoft C++ Build Tools ("Desktop development with C++"), which Rust needs to link.
+WebView2 already ships with Windows 10/11. See the
+[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for details.
+
+### Everyday commands
+
+Run these from the repository root:
+
+```powershell
+npm ci             # install dependencies (first time, and after package-lock.json changes)
+npm run dev        # the desktop window with hot reload (first run compiles Rust and takes a few minutes)
+npm test           # Angular unit tests (Vitest)
+npm run bundle     # release build: NSIS .exe and .msi under src-tauri\target\release\bundle
+cargo test --manifest-path src-tauri\Cargo.toml
+```
+
+`npm run dev` starts `ng serve` and opens the app window. Changes under `src/` reload instantly; changes under
+`src-tauri/` rebuild and restart the app.
 
 ### UI preview without a provider
 
 `npm run start:mock` serves the Angular app with a fake backend (made-up channels, guide, movies and series;
-playback uses a public sample video). Open http://localhost:4200 and sign in with any values. This works from
-WSL too: run it there and open the URL in your Windows browser. The mock is never included in production builds.
-
-### Running the desktop app on WSL
-
-On Windows 11 (WSLg), the real Tauri window runs from WSL with the Linux webview:
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-sudo apt install build-essential libssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev
-npm ci && npm run dev
-```
-
-WebKitGTK decodes video through GStreamer, so live and movie playback in WSL also need
-`gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav`. Windows builds use WebView2 instead.
+playback uses a public sample video). Open http://localhost:4200 and sign in with any values. The mock is never
+included in production builds.
 
 CI runs lint and tests on Ubuntu and builds the Windows installers on every pull request; the installers are
 attached to the workflow run as an artifact.
@@ -95,7 +102,7 @@ installer with a code-signing certificate. See the
 ## Roadmap
 
 1. Native playback through **libmpv** for full container and codec support (MKV, HEVC, AC3/DTS, subtitles).
-2. Per-profile settings (favourites, history) and Secret Service support on Linux desktops.
+2. Per-profile settings (favourites, history).
 3. Favourites, recently watched, resume position for movies and episodes.
 4. Full XMLTV EPG (`xmltv.php`) with a local cache, and catch-up for channels with `tv_archive`.
 5. Microsoft Store submission and auto-updates for the direct download.
