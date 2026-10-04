@@ -50,8 +50,24 @@ npm run bundle     # release build: NSIS .exe and .msi under src-tauri/target/re
 cd src-tauri && cargo test
 ```
 
-`npm start` alone runs the Angular app in a browser, but every provider call needs the Tauri backend, so use
-`npm run dev` for real work.
+### UI preview without a provider
+
+`npm run start:mock` serves the Angular app with a fake backend (made-up channels, guide, movies and series;
+playback uses a public sample video). Open http://localhost:4200 and sign in with any values. This works from
+WSL too: run it there and open the URL in your Windows browser. The mock is never included in production builds.
+
+### Running the desktop app on WSL
+
+On Windows 11 (WSLg), the real Tauri window runs from WSL with the Linux webview:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+sudo apt install build-essential libssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev
+npm ci && npm run dev
+```
+
+WebKitGTK decodes video through GStreamer, so live and movie playback in WSL also need
+`gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav`. Windows builds use WebView2 instead.
 
 CI runs lint and tests on Ubuntu and builds the Windows installers on every pull request; the installers are
 attached to the workflow run as an artifact.

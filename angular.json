@@ -64,6 +64,17 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "mock": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/dev/mock-backend.ts",
+                  "with": "src/dev/mock-backend.mock.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -76,6 +87,9 @@
             },
             "development": {
               "buildTarget": "iptv-player:build:development"
+            },
+            "mock": {
+              "buildTarget": "iptv-player:build:mock"
             }
           },
           "defaultConfiguration": "development"
