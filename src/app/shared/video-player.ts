@@ -15,6 +15,27 @@ import type Mpegts from 'mpegts.js';
  * episodes use the native element; containers or codecs the webview cannot
  * decode (often MKV with AC3/DTS audio) surface as an error message.
  */
+/**
+ * IPTV panels deliver live TS in bursts, so the player needs a few seconds of
+ * headroom. Latency is trimmed by playing slightly faster (`liveSync`) rather
+ * than seeking to the live edge, which would drain the buffer and stall.
+ */
+const LIVE_CONFIG: Mpegts.Config = {
+  enableWorker: false,
+  enableStashBuffer: true,
+  stashInitialSize: 1024 * 1024,
+  lazyLoad: false,
+  liveBufferLatencyChasing: false,
+  liveSync: true,
+  liveSyncMaxLatency: 12,
+  liveSyncTargetLatency: 6,
+  liveSyncPlaybackRate: 1.1,
+  // Long sessions would otherwise grow the SourceBuffer until it overflows.
+  autoCleanupSourceBuffer: true,
+  autoCleanupMaxBackwardDuration: 60,
+  autoCleanupMinBackwardDuration: 30,
+};
+
 @Component({
   selector: 'app-video-player',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -73,10 +94,7 @@ export class VideoPlayer {
             this.error.set('Live MPEG-TS playback is not supported by this webview.');
             return;
           }
-          player = mpegts.createPlayer(
-            { type: 'mpegts', isLive: true, url: src },
-            { enableWorker: false, liveBufferLatencyChasing: true, lazyLoad: false },
-          );
+          player = mpegts.createPlayer({ type: 'mpegts', isLive: true, url: src }, LIVE_CONFIG);
           player.on(mpegts.Events.ERROR, (type: string, detail: string) =>
             this.error.set(`Playback error: ${type} (${detail})`),
           );
