@@ -92,9 +92,12 @@ needed. CI packs it on every run (artifact `infinite-iptv-msix`) with the Partne
 `packaging/msix/build-msix.ps1`. To build and try it locally (Developer Mode on):
 
 ```powershell
-npm run tauri -- build --no-bundle
-./packaging/msix/build-msix.ps1 -Register
+npm.cmd run tauri -- build --no-bundle
+powershell -ExecutionPolicy Bypass -File .\packaging\msix\build-msix.ps1 -Register
 ```
+
+(`npm.cmd` and `-ExecutionPolicy Bypass` work around PowerShell's default policy blocking scripts, for this
+command only.)
 
 `-Register` installs the unpacked package so you can test it from the Start menu; remove it from
 Settings > Apps. Bump `version` in `src-tauri/tauri.conf.json` for every submission; the package version is
