@@ -87,11 +87,19 @@ attached to the workflow run as an artifact.
 
 ## Microsoft Store
 
-The Store accepts Win32 apps submitted as an `.msi` or `.exe` installer, which `npm run bundle` already
-produces. Before submitting: reserve the app name in Partner Center, set `identifier` and `publisher` in
-`src-tauri/tauri.conf.json`, replace the placeholder icons (`npx tauri icon path/to/icon.png`), and sign the
-installer with a code-signing certificate. See the
-[Tauri guide](https://v2.tauri.app/distribute/microsoft-store/).
+The Store build is an MSIX package. The Store signs it after certification, so no code-signing certificate is
+needed. CI packs it on every run (artifact `infinite-iptv-msix`) using the identity from the repository
+variables `MSIX_IDENTITY_NAME`, `MSIX_PUBLISHER` and `MSIX_PUBLISHER_DISPLAY_NAME`, copied from Partner Center
+> your app > Product identity. To build and try it locally (Developer Mode on):
+
+```powershell
+npm run tauri -- build --no-bundle
+./packaging/msix/build-msix.ps1 -Register    # add -IdentityName/-Publisher/-PublisherDisplayName for a Store build
+```
+
+`-Register` installs the unpacked package so you can test it from the Start menu; remove it from
+Settings > Apps. Bump `version` in `src-tauri/tauri.conf.json` for every submission; the package version is
+that plus `.0`. The privacy policy linked from the Store listing is [PRIVACY.md](PRIVACY.md).
 
 ## Known limitations
 
