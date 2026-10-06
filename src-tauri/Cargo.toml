@@ -1,5 +1,5 @@
 [package]
-name = "iptv-player"
+name = "infinite-iptv"
 version = "0.1.0"
 description = "Desktop IPTV player for Xtream Codes providers"
 authors = ["Argyris"]
@@ -9,7 +9,7 @@ edition = "2024"
 rust-version = "1.90"
 
 [lib]
-name = "iptv_player_lib"
+name = "infinite_iptv_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

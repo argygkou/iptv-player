@@ -6,7 +6,7 @@
   },
   "newProjectRoot": "projects",
   "projects": {
-    "iptv-player": {
+    "infinite-iptv": {
       "projectType": "application",
       "schematics": {
         "@schematics/angular:component": {
@@ -83,13 +83,13 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "iptv-player:build:production"
+              "buildTarget": "infinite-iptv:build:production"
             },
             "development": {
-              "buildTarget": "iptv-player:build:development"
+              "buildTarget": "infinite-iptv:build:development"
             },
             "mock": {
-              "buildTarget": "iptv-player:build:mock"
+              "buildTarget": "infinite-iptv:build:mock"
             }
           },
           "defaultConfiguration": "development"

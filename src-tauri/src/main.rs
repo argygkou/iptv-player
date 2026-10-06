@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    iptv_player_lib::run();
+    infinite_iptv_lib::run();
 }

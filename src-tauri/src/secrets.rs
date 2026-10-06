@@ -14,7 +14,7 @@ mod imp {
     use super::*;
     use crate::error::AppError;
 
-    const SERVICE: &str = "com.argygkou.iptvplayer";
+    const SERVICE: &str = "com.argygkou.infiniteiptv";
 
     fn entry(id: &str) -> AppResult<keyring::Entry> {
         keyring::Entry::new(SERVICE, id).map_err(|e| AppError::Storage(e.to_string()))
