@@ -56,16 +56,10 @@ jobs:
           workspaces: src-tauri
       - run: npm ci
       - run: npm run bundle -- --bundles nsis,msi
-      # Store package from the same release binary. The identity comes from repository
-      # variables (Settings > Secrets and variables > Actions > Variables), copied from
-      # Partner Center > Product identity; without them it builds a dev-identity package.
+      # Store package (unsigned; the Store signs it) from the same release binary
       - name: Pack MSIX
         shell: pwsh
         run: ./packaging/msix/build-msix.ps1
-        env:
-          MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
-          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
-          MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}
       - uses: actions/upload-artifact@v4
         with:
           name: infinite-iptv-windows

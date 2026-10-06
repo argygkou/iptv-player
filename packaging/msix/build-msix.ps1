@@ -12,16 +12,14 @@
   folder directly.
 
 .EXAMPLE
-  ./packaging/msix/build-msix.ps1 -IdentityName 12345Argyris.InfiniteIPTV `
-    -Publisher "CN=00000000-0000-0000-0000-000000000000" -PublisherDisplayName "Argyris"
+  ./packaging/msix/build-msix.ps1 -Register
 #>
 param(
-  # Partner Center > Product identity > Package/Identity/Name
-  [string] $IdentityName = $(if ($env:MSIX_IDENTITY_NAME) { $env:MSIX_IDENTITY_NAME } else { 'InfiniteIPTV.Dev' }),
-  # Partner Center > Product identity > Package/Identity/Publisher
-  [string] $Publisher = $(if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { 'CN=InfiniteIPTV.Dev' }),
-  # Partner Center > Product identity > Package/Properties/PublisherDisplayName
-  [string] $PublisherDisplayName = $(if ($env:MSIX_PUBLISHER_DISPLAY_NAME) { $env:MSIX_PUBLISHER_DISPLAY_NAME } else { 'Infinite IPTV (dev)' }),
+  # Partner Center > Product identity. These are public (they ship inside every package),
+  # so they live here rather than in CI secrets.
+  [string] $IdentityName = '19957ArgirisGoudoulas.InfiniteIPTV',
+  [string] $Publisher = 'CN=650AF876-5B91-4001-9B5D-46E596CF2B4B',
+  [string] $PublisherDisplayName = 'Argyris Gkountoulas',
   # Install the unpacked layout for local testing instead of only producing the .msix
   [switch] $Register
 )

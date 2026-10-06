@@ -88,13 +88,12 @@ attached to the workflow run as an artifact.
 ## Microsoft Store
 
 The Store build is an MSIX package. The Store signs it after certification, so no code-signing certificate is
-needed. CI packs it on every run (artifact `infinite-iptv-msix`) using the identity from the repository
-variables `MSIX_IDENTITY_NAME`, `MSIX_PUBLISHER` and `MSIX_PUBLISHER_DISPLAY_NAME`, copied from Partner Center
-> your app > Product identity. To build and try it locally (Developer Mode on):
+needed. CI packs it on every run (artifact `infinite-iptv-msix`) with the Partner Center product identity set in
+`packaging/msix/build-msix.ps1`. To build and try it locally (Developer Mode on):
 
 ```powershell
 npm run tauri -- build --no-bundle
-./packaging/msix/build-msix.ps1 -Register    # add -IdentityName/-Publisher/-PublisherDisplayName for a Store build
+./packaging/msix/build-msix.ps1 -Register
 ```
 
 `-Register` installs the unpacked package so you can test it from the Start menu; remove it from
