@@ -12,10 +12,11 @@ use windows_sys::Win32::Graphics::Gdi::{
     BLACK_BRUSH, CreateRectRgn, GetStockObject, HBRUSH, SetWindowRgn,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{EnableWindow, SetFocus};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CS_DBLCLKS, CreateWindowExW, DefWindowProcW, GW_CHILD, GetWindow, HWND_TOP, RegisterClassW,
-    SW_HIDE, SWP_NOACTIVATE, SWP_SHOWWINDOW, SetWindowPos, ShowWindow, WM_MOUSEMOVE, WNDCLASSW,
+    SW_HIDE, SWP_NOACTIVATE, SWP_SHOWWINDOW, SetWindowPos, ShowWindow, WM_LBUTTONDOWN,
+    WM_MBUTTONDOWN, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_PARENTNOTIFY, WM_RBUTTONDOWN, WNDCLASSW,
     WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
 };
 
@@ -29,8 +30,10 @@ fn wide(value: &str) -> Vec<u16> {
 
 /// Embedded mpv creates its video window disabled, expecting the host to
 /// forward input, so mouse moves land here instead. The first one re-enables
-/// mpv's window; from then on mouse and keyboard reach mpv directly and its
-/// on-screen controller and shortcuts work.
+/// mpv's window; from then on the mouse reaches mpv directly and its on-screen
+/// controller works. mpv also never takes keyboard focus by itself, so a click
+/// on the video (reported here as `WM_MOUSEACTIVATE` or `WM_PARENTNOTIFY`)
+/// gives it focus, and its keyboard shortcuts work too.
 unsafe extern "system" fn window_proc(
     hwnd: HWND,
     message: u32,
@@ -39,10 +42,24 @@ unsafe extern "system" fn window_proc(
 ) -> LRESULT {
     // SAFETY: plain Win32 calls on this window and its child.
     unsafe {
-        if message == WM_MOUSEMOVE {
-            let child = GetWindow(hwnd, GW_CHILD);
-            if !child.is_null() {
-                EnableWindow(child, 1);
+        let child = GetWindow(hwnd, GW_CHILD);
+        if !child.is_null() {
+            match message {
+                WM_MOUSEMOVE => {
+                    EnableWindow(child, 1);
+                }
+                WM_MOUSEACTIVATE => {
+                    SetFocus(child);
+                }
+                WM_PARENTNOTIFY
+                    if matches!(
+                        (wparam & 0xffff) as u32,
+                        WM_LBUTTONDOWN | WM_RBUTTONDOWN | WM_MBUTTONDOWN
+                    ) =>
+                {
+                    SetFocus(child);
+                }
+                _ => {}
             }
         }
         DefWindowProcW(hwnd, message, wparam, lparam)
