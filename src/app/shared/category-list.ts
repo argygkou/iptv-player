@@ -109,7 +109,14 @@ interface ShownGroup extends CategoryGroup {
                 [attr.aria-expanded]="isOpen(group)"
                 (click)="toggleGroup(group)"
               >
-                <span class="chevron" [class.open]="isOpen(group)" aria-hidden="true">›</span>
+                <svg
+                  class="chevron"
+                  [class.open]="isOpen(group)"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path d="M9 5l7 7-7 7" />
+                </svg>
                 <span class="label">{{ group.name }}</span>
                 <span class="count">{{ group.categories.length }}</span>
               </button>
@@ -243,16 +250,20 @@ interface ShownGroup extends CategoryGroup {
       border-radius: var(--radius);
       color: var(--text-muted);
     }
-    .row:hover {
-      background: var(--surface-hover);
-      color: var(--text);
+    /* Hover only colours what is under the pointer; only the selected row has a background. */
+    .row button,
+    .row button:hover:not(:disabled) {
+      background: none;
+    }
+    .pick:hover {
+      color: var(--accent);
     }
     .row.active {
       background: var(--accent-soft);
       color: var(--text);
     }
     .row.nested .pick {
-      padding-left: 1.9rem;
+      padding-left: 2.3rem;
     }
     .row.hidden .label {
       opacity: 0.45;
@@ -268,8 +279,9 @@ interface ShownGroup extends CategoryGroup {
       text-transform: uppercase;
     }
     .chevron {
-      display: inline-block;
-      width: 0.8rem;
+      flex: none;
+      width: 1.15rem;
+      height: 1.15rem;
       transition: transform 0.12s;
     }
     .chevron.open {
@@ -306,6 +318,7 @@ interface ShownGroup extends CategoryGroup {
       color: var(--accent);
     }
     svg {
+      display: block;
       width: 1rem;
       height: 1rem;
       fill: none;
