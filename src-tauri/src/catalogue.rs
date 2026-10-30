@@ -125,8 +125,8 @@ impl CatalogueStore {
         let previous = tokio::fs::read(&path).await.ok();
         let body = fetch(http, creds, list).await?;
         if previous.as_deref() == Some(body.get().as_bytes()) {
-            // Touch the file so the unchanged list counts as fresh again.
-            persist(&path, body.get()).await?;
+            // Mark the unchanged list fresh again without rewriting tens of megabytes.
+            touch(&path)?;
             return Ok(Snapshot {
                 updated_at: now(),
                 stale: false,
@@ -167,9 +167,7 @@ fn as_list(body: String) -> AppResult<Box<RawValue>> {
     };
     let raw = RawValue::from_string(body)?;
     if !raw.get().starts_with('[') {
-        return Err(AppError::InvalidInput(
-            "the provider did not return a list".into(),
-        ));
+        return Err(AppError::NotAList);
     }
     Ok(raw)
 }
@@ -210,9 +208,18 @@ async fn persist(path: &Path, body: &str) -> AppResult<()> {
     if let Some(dir) = path.parent() {
         tokio::fs::create_dir_all(dir).await?;
     }
-    let tmp = path.with_extension("json.tmp");
+    // Unique, so a first download and a refresh of the same list cannot share it.
+    let tmp = path.with_extension(format!("json.{}.tmp", crate::state::random_hex(4)));
     tokio::fs::write(&tmp, body).await?;
     tokio::fs::rename(&tmp, path).await?;
+    Ok(())
+}
+
+fn touch(path: &Path) -> AppResult<()> {
+    std::fs::File::options()
+        .write(true)
+        .open(path)?
+        .set_modified(SystemTime::now())?;
     Ok(())
 }
 
@@ -325,6 +332,32 @@ mod tests {
             .await
             .unwrap();
         assert!(same.items.is_none());
+        // An unchanged list is marked fresh again.
+        let path = store.path(&creds, List::LiveStreams);
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(SystemTime::now() - Duration::from_secs(7 * HOUR))
+            .unwrap();
+        assert!(
+            store
+                .get(&http, &creds, List::LiveStreams)
+                .await
+                .unwrap()
+                .stale
+        );
+        store
+            .refresh(&http, &creds, List::LiveStreams)
+            .await
+            .unwrap();
+        assert!(
+            !store
+                .get(&http, &creds, List::LiveStreams)
+                .await
+                .unwrap()
+                .stale
+        );
 
         mode.store(1, Ordering::SeqCst);
         let changed = store
