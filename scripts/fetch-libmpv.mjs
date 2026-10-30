@@ -20,8 +20,8 @@ const REPO = 'shinchiro/mpv-winbuild-cmake';
 const DLL = 'libmpv-2.dll';
 // x86_64 builds without the `-v3` suffix run on any 64-bit CPU.
 const ASSET = /^mpv-dev-x86_64-\d{8}-git-[0-9a-f]+\.7z$/;
-const RELEASE = null;
-const SHA256 = null;
+const RELEASE = '20261021';
+const SHA256 = 'efc719eff3dc5954b4a5efc800632808bcec01cc9034940dd14e5eb7fe9ea633';
 
 const target = join(dirname(fileURLToPath(import.meta.url)), '..', 'src-tauri', 'lib', DLL);
 

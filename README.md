@@ -109,7 +109,7 @@ installer with a code-signing certificate. See the
 ## Known limitations
 
 - `libmpv-2.dll` comes from the [mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases)
-  builds (latest release unless `MPV_RELEASE` names a tag). Those builds are GPL-licensed, which matters if the
+  builds (pinned to release `20261021` and checked by SHA-256 in `scripts/fetch-libmpv.mjs`). Those builds are GPL-licensed, which matters if the
   app is ever distributed.
 - Native playback is Windows-only for now; elsewhere the webview player is used, with its codec limits.
 - The guide loads short EPG for the first 60 channels of a category.
