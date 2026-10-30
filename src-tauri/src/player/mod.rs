@@ -232,10 +232,12 @@ impl Native {
         // uosc, a modern on-screen interface, when it is bundled; mpv's own
         // controller otherwise. Its config directory holds nothing but uosc.
         let config_dir = app.path().resource_dir().map_err(failed)?.join("mpv");
-        let config_dir = config_dir
-            .join("scripts/uosc/main.lua")
-            .is_file()
-            .then(|| config_dir.to_string_lossy().into_owned());
+        // `resource_dir` can be a `\\?\` path, where the `/` mpv appends to reach
+        // `scripts` and `fonts` is not a separator, so mpv would find neither.
+        let config_dir = config_dir.join("scripts/uosc/main.lua").is_file().then(|| {
+            let dir = config_dir.to_string_lossy();
+            dir.trim_start_matches(r"\\?\").to_owned()
+        });
         let mut options = vec![
             ("wid", wid.as_str()),
             ("idle", "yes"),
