@@ -7,6 +7,11 @@ import { LiveStream, Programme } from './xtream.models';
 /** Short EPG costs a request per channel, so the fallback covers this many. */
 const SHORT_EPG_CHANNELS = 60;
 const SHORT_EPG_CONCURRENCY = 6;
+/**
+ * How long to wait for the full guide before showing short EPG. The first
+ * download can take minutes; when it lands, `version` reloads the lists.
+ */
+const FULL_GUIDE_WAIT = 4000;
 
 /**
  * Programmes for channels, from the provider's full XMLTV guide. Channels the
@@ -33,19 +38,11 @@ export class TvGuide {
   ): Promise<Map<string, Programme[]>> {
     const result = new Map<string, Programme[]>();
     const ids = [...new Set(streams.flatMap((s) => s.epg_channel_id || []))];
-    if (ids.length > 0) {
-      try {
-        const guide = await this.api.guide(ids, from, to);
-        this.updatedAt.set(guide.updatedAt);
-        this.error.set(null);
-        for (const stream of streams) {
-          const list = stream.epg_channel_id && guide.programmes.get(stream.epg_channel_id);
-          if (list) {
-            result.set(String(stream.stream_id), list);
-          }
-        }
-      } catch (err) {
-        this.error.set(String(err));
+    const guide = ids.length > 0 ? await this.fullGuide(ids, from, to) : undefined;
+    for (const stream of streams) {
+      const list = stream.epg_channel_id && guide?.get(stream.epg_channel_id);
+      if (list) {
+        result.set(String(stream.stream_id), list);
       }
     }
 
@@ -71,6 +68,40 @@ export class TvGuide {
     return result;
   }
 
+  /**
+   * The full guide's programmes by XMLTV id; `undefined` when it failed or is
+   * still downloading after `FULL_GUIDE_WAIT`.
+   */
+  private async fullGuide(
+    ids: string[],
+    from: Date,
+    to: Date,
+  ): Promise<Map<string, Programme[]> | undefined> {
+    let waited = false;
+    const request = this.api.guide(ids, from, to).then(
+      (guide) => {
+        this.error.set(null);
+        if (this.updatedAt()?.getTime() !== guide.updatedAt.getTime()) {
+          this.updatedAt.set(guide.updatedAt);
+          // Lists shown in the meantime fell back to short EPG; reload them.
+          if (waited) {
+            this.version.update((n) => n + 1);
+          }
+        }
+        return guide.programmes;
+      },
+      (err: unknown) => {
+        this.error.set(String(err));
+        return undefined;
+      },
+    );
+    const timeout = delay(FULL_GUIDE_WAIT).then(() => {
+      waited = true;
+      return undefined;
+    });
+    return Promise.race([request, timeout]);
+  }
+
   /** Downloads the guide again and reloads whatever lists programmes. */
   async refresh(): Promise<void> {
     const now = new Date();
@@ -83,4 +114,8 @@ export class TvGuide {
     }
     this.version.update((n) => n + 1);
   }
+}
+
+function delay(ms: number): Promise<undefined> {
+  return new Promise((resolve) => setTimeout(() => resolve(undefined), ms));
 }

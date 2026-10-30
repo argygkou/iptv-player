@@ -69,4 +69,29 @@ describe('TvGuide', () => {
     expect(api.guide.mock.calls[0][3]).toBe(true);
     expect(tvGuide.version()).toBe(1);
   });
+
+  it('shows short EPG while the full guide downloads, then reloads', async () => {
+    vi.useFakeTimers();
+    try {
+      const tvGuide = setup();
+      let finish!: (value: unknown) => void;
+      api.guide.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+
+      const pending = tvGuide.programmes(
+        [stream(1, 'news.gr')],
+        new Date(Date.now() - HOUR),
+        new Date(Date.now() + HOUR),
+      );
+      await vi.advanceTimersByTimeAsync(5000);
+      const result = await pending;
+      expect(result.get('1')?.[0].title).toBe('Short');
+      expect(tvGuide.version()).toBe(0);
+
+      finish({ updatedAt: new Date(), programmes: new Map() });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(tvGuide.version()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

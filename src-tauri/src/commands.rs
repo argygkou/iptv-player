@@ -102,7 +102,7 @@ pub fn remove_profile(state: State<'_, Arc<AppState>>, id: String) -> AppResult<
 pub async fn logout(state: State<'_, Arc<AppState>>) -> AppResult<()> {
     *state.session.write().await = None;
     state.library.close();
-    state.epg.close().await;
+    state.epg.close();
     state.profiles.set_active(None)
 }
 

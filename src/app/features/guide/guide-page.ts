@@ -84,11 +84,15 @@ export class GuidePage {
 
   protected readonly timelineWidth = WINDOW_MINUTES * PX_PER_MINUTE;
   /** Starts at the previous half hour, minus 30 minutes of context, then shifted. */
-  protected readonly windowStart = computed(() => {
-    const start = new Date(this.clock.now());
-    start.setMinutes(start.getMinutes() < 30 ? 0 : 30, 0, 0);
-    return new Date(start.getTime() - 30 * MINUTE + this.shift() * 60 * MINUTE);
-  });
+  protected readonly windowStart = computed(
+    () => {
+      const start = new Date(this.clock.now());
+      start.setMinutes(start.getMinutes() < 30 ? 0 : 30, 0, 0);
+      return new Date(start.getTime() - 30 * MINUTE + this.shift() * 60 * MINUTE);
+    },
+    // Only a new half hour moves the window; each clock tick must not reload the guide.
+    { equal: (a, b) => a.getTime() === b.getTime() },
+  );
   protected readonly windowEnd = computed(
     () => new Date(this.windowStart().getTime() + WINDOW_MINUTES * MINUTE),
   );

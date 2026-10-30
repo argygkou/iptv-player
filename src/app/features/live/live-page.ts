@@ -88,12 +88,23 @@ export class LivePage {
     return streams;
   });
   protected readonly visibleStreams = computed(() => filterByName(this.listed(), this.search()));
-  protected readonly selected = computed(() => {
-    const id = this.channel();
-    return this.streams.hasValue()
-      ? this.streams.value().find((s) => String(s.stream_id) === id)
-      : undefined;
+  /** Every channel, so the one playing stays known while another category is browsed. */
+  private readonly allStreams = resource({
+    params: () => this.channel(),
+    loader: () => this.api.liveStreams(),
   });
+  protected readonly selected = computed(
+    () => {
+      const id = this.channel();
+      const find = (list: LiveStream[]) => list.find((s) => String(s.stream_id) === id);
+      return (
+        (this.allStreams.hasValue() ? find(this.allStreams.value()) : undefined) ??
+        (this.streams.hasValue() ? find(this.streams.value()) : undefined)
+      );
+    },
+    // The same channel from another list is not a change; it would reload its guide.
+    { equal: (a, b) => a?.stream_id === b?.stream_id },
+  );
 
   /** The recorded programme being watched instead of the live channel. */
   protected readonly recording = computed<Programme | undefined>(() => {
@@ -224,8 +235,11 @@ export class LivePage {
 
   constructor() {
     // Bring what is on (or the recording being watched) into view, past the archive above it.
+    // Not on every clock tick, so reading ahead is not interrupted.
     afterRenderEffect(() => {
-      this.programmes();
+      if (this.epg.hasValue()) {
+        this.epg.value();
+      }
       this.recording();
       this.fullscreen();
       const list = this.epgList()?.nativeElement;
