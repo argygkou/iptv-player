@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, inject, input, resource, signal } f
 
 import { XtreamApi } from '../../core/xtream/xtream-api';
 import { VodInfo } from '../../core/xtream/xtream.models';
-import { VideoPlayer } from '../../shared/video-player';
+import { VideoPlayer } from '../../shared/player/video-player';
 
 @Component({
   selector: 'app-movie-detail-page',

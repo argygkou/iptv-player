@@ -9,7 +9,9 @@ Windows is the first target; Linux and iOS are planned (see [Roadmap](#roadmap))
 
 - Sign in with Xtream Codes credentials. "Keep me signed in" saves the account as a profile, so the next launch
   opens straight on Live TV. Several accounts can be saved and picked on the sign-in screen.
-- **Live TV**: categories, channel search, MPEG-TS playback through mpegts.js, now/next EPG with progress.
+- **Native playback** through libmpv: MKV, HEVC, AC3/DTS, subtitles and audio tracks all play. mpv's on-screen
+  controller ([ModernZ](https://github.com/Samillion/ModernZ)) handles seeking, volume and track selection; double-click or press `F` for fullscreen, `Esc` to leave it.
+- **Live TV**: categories, channel search, now/next EPG with progress.
 - **TV Guide**: a timeline grid per category (six hours around now); click a channel to watch it.
 - **Movies**: category browser, poster grid with search and incremental rendering, details and playback.
 - **Series**: category browser, seasons and episodes, playback.
@@ -20,11 +22,13 @@ Windows is the first target; Linux and iOS are planned (see [Roadmap](#roadmap))
 src/                         Angular app (standalone components, signals, resource())
   app/core/xtream/           Typed models, XtreamApi facade over Tauri commands, EPG helpers
   app/core/session/          SessionStore (signals) and the auth guard
-  app/shared/                Video player, category list, poster grid, utilities
+  app/shared/player/         Video player: native (libmpv) with a webview fallback
+  app/shared/                Category list, poster grid, utilities
   app/features/              login, shell, live, guide, movies, series (all lazy routes)
 src-tauri/                   Rust backend
   src/xtream.rs              player_api.php client (allow-listed actions only)
   src/proxy.rs               Local stream relay on 127.0.0.1
+  src/player/                libmpv binding and the native video window (Windows)
   src/commands.rs            login / logout / xtream / stream_url commands
 ```
 
@@ -41,6 +45,13 @@ live stream, and an https app origin would block `http://` media entirely. The b
 server on a random `127.0.0.1` port that builds the upstream URL from the signed-in session, forwards `Range`
 for seeking, and adds CORS headers. Each run gets a random token that every relay request must carry, so other
 local processes or web pages cannot use it.
+
+**How native playback works.** WebView2 cannot decode most movie files, so on Windows the app loads
+`libmpv-2.dll` at runtime and lets mpv render into a native child window placed over the player's box in the
+page. The Angular player measures that box every frame (clipped to its scroll container) and the backend moves
+the window to match. mpv plays the same relay URLs, and its fullscreen toggle drives the app window. The DLL is
+bundled next to the executable; without it (mock mode, other platforms) the app falls back to the webview player
+(mpegts.js for live TV). One limitation of the native window: HTML cannot be drawn on top of the video.
 
 ## Development
 
@@ -67,6 +78,8 @@ Run these from the repository root:
 
 ```powershell
 npm ci             # install dependencies (first time, and after package-lock.json changes)
+npm run fetch-libmpv  # download libmpv-2.dll into src-tauri\lib (dev and bundle also do this when it's missing;
+                      # plain cargo commands need it too, and fail to copy it while the app is running)
 npm run dev        # the desktop window with hot reload (first run compiles Rust and takes a few minutes)
 npm test           # Angular unit tests (Vitest)
 npm run bundle     # release build: NSIS .exe and .msi under src-tauri\target\release\bundle
@@ -95,15 +108,18 @@ installer with a code-signing certificate. See the
 
 ## Known limitations
 
-- Playback uses the webview's own decoders. MP4/H.264/AAC and live MPEG-TS work; many movie files are MKV with
-  AC3/DTS audio or HEVC video, which WebView2 cannot decode. The player shows an error for those.
+- The player controls are [ModernZ](https://github.com/Samillion/ModernZ) (LGPL-2.1), bundled in `mpv/` next to the
+  executable; without it, mpv's built-in controller is used.
+- `libmpv-2.dll` comes from the [mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases)
+  builds (pinned to release `20261021` and checked by SHA-256 in `scripts/fetch-libmpv.mjs`). Those builds are GPL-licensed, which matters if the
+  app is ever distributed.
+- Native playback is Windows-only for now; elsewhere the webview player is used, with its codec limits.
 - The guide loads short EPG for the first 60 channels of a category.
 
 ## Roadmap
 
-1. Native playback through **libmpv** for full container and codec support (MKV, HEVC, AC3/DTS, subtitles).
-2. Per-profile settings (favourites, history).
-3. Favourites, recently watched, resume position for movies and episodes.
-4. Full XMLTV EPG (`xmltv.php`) with a local cache, and catch-up for channels with `tv_archive`.
-5. Microsoft Store submission and auto-updates for the direct download.
-6. Linux packages (`.deb`, AppImage), then iOS through Tauri's mobile target.
+1. Per-profile settings (favourites, history).
+2. Favourites, recently watched, resume position for movies and episodes.
+3. Full XMLTV EPG (`xmltv.php`) with a local cache, and catch-up for channels with `tv_archive`.
+4. Microsoft Store submission and auto-updates for the direct download.
+5. Linux packages (`.deb`, AppImage) with native playback, then iOS through Tauri's mobile target.

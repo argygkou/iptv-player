@@ -1,0 +1,91 @@
+import { Injectable, signal } from '@angular/core';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+
+import { Bounds } from './bounds';
+
+interface PlaybackError {
+  /** The `open()` call the failing stream belongs to. */
+  generation: number;
+  message: string;
+}
+
+/**
+ * Client for the libmpv player in the Rust backend. There is one native video
+ * window, so calls are queued: a `stop()` from a destroyed player can never be
+ * overtaken by the `open()` that preceded it, and bounds updates only reach
+ * the window while something is playing.
+ */
+@Injectable({ providedIn: 'root' })
+export class NativePlayback {
+  /** Whether libmpv loaded; `false` in mock mode, off Windows, or with a broken DLL. */
+  readonly available: Promise<boolean> = invoke<boolean>('player_available').catch(() => false);
+
+  /** Set when mpv's controls (button, double-click, F, Esc) toggle fullscreen. */
+  readonly fullscreen = signal(false);
+  /** The last error mpv reported for the current stream. */
+  readonly error = signal<string | null>(null);
+
+  private queue: Promise<unknown> = Promise.resolve();
+  private playing = false;
+  private listening = false;
+  private generation = 0;
+  /** Latest bounds not yet sent; updates in between are dropped, not queued. */
+  private pendingBounds: Bounds | null = null;
+
+  open(url: string, live: boolean, bounds: Bounds): Promise<void> {
+    this.listen();
+    this.error.set(null);
+    // Set before the call: an error can arrive before `player_open` returns.
+    const generation = ++this.generation;
+    return this.enqueue(async () => {
+      this.playing = true;
+      await invoke('player_open', { media: { url, generation, live }, bounds });
+    });
+  }
+
+  setBounds(bounds: Bounds): Promise<void> {
+    const scheduled = this.pendingBounds !== null;
+    this.pendingBounds = bounds;
+    if (scheduled) {
+      return Promise.resolve();
+    }
+    return this.enqueue(async () => {
+      const latest = this.pendingBounds;
+      this.pendingBounds = null;
+      if (this.playing && latest) {
+        await invoke('player_set_bounds', { bounds: latest });
+      }
+    });
+  }
+
+  stop(): Promise<void> {
+    return this.enqueue(async () => {
+      this.playing = false;
+      await invoke('player_stop');
+    });
+  }
+
+  private enqueue(task: () => Promise<void>): Promise<void> {
+    const run = this.queue.then(task);
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+
+  private listen(): void {
+    if (this.listening) {
+      return;
+    }
+    this.listening = true;
+    void listen<boolean>('player://fullscreen', ({ payload }) => this.fullscreen.set(payload));
+    void listen<PlaybackError>('player://error', ({ payload }) => {
+      // A stream the user already left may still fail; that is not news.
+      if (payload.generation !== this.generation) {
+        return;
+      }
+      this.error.set(payload.message);
+      // Hide the video window so the message underneath is visible.
+      void this.stop();
+    });
+  }
+}

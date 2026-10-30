@@ -12,7 +12,7 @@ import {
 
 import { XtreamApi } from '../../core/xtream/xtream-api';
 import { Episode, SeriesInfo } from '../../core/xtream/xtream.models';
-import { VideoPlayer } from '../../shared/video-player';
+import { VideoPlayer } from '../../shared/player/video-player';
 
 /** Normalises the `episodes` payload, which panels send as an object or an array. */
 export function episodesBySeason(info: SeriesInfo): Map<string, Episode[]> {

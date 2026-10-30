@@ -10,10 +10,11 @@ import {
 import type Mpegts from 'mpegts.js';
 
 /**
- * Plays a relay URL. Live channels are MPEG-TS, which Chromium/WebView2 cannot
- * play natively, so they go through mpegts.js (loaded on demand). Movies and
- * episodes use the native element; containers or codecs the webview cannot
- * decode (often MKV with AC3/DTS audio) surface as an error message.
+ * Fallback player for when libmpv is unavailable (mock mode, other platforms):
+ * plays a relay URL in the webview. Live channels are MPEG-TS, which
+ * Chromium/WebView2 cannot play natively, so they go through mpegts.js (loaded
+ * on demand). Movies and episodes use the native element; containers or codecs
+ * the webview cannot decode (often MKV with AC3/DTS audio) surface as an error.
  */
 /**
  * IPTV panels deliver live TS in bursts, so the player needs a few seconds of
@@ -37,7 +38,7 @@ const LIVE_CONFIG: Mpegts.Config = {
 };
 
 @Component({
-  selector: 'app-video-player',
+  selector: 'app-web-video-player',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <video #video controls autoplay playsinline></video>
@@ -49,8 +50,7 @@ const LIVE_CONFIG: Mpegts.Config = {
     :host {
       position: relative;
       display: block;
-      background: #000;
-      aspect-ratio: 16 / 9;
+      height: 100%;
     }
     video {
       width: 100%;
@@ -66,7 +66,7 @@ const LIVE_CONFIG: Mpegts.Config = {
     }
   `,
 })
-export class VideoPlayer {
+export class WebVideoPlayer {
   readonly src = input.required<string>();
   readonly live = input(false);
 
