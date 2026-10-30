@@ -1,9 +1,11 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde::Serialize;
 use serde_json::Value;
 use tauri::State;
 
+use crate::epg::Programme;
 use crate::error::{AppError, AppResult};
 use crate::library::{Item, ItemKind, Library};
 use crate::profiles::Profile;
@@ -87,6 +89,9 @@ pub fn list_profiles(state: State<'_, Arc<AppState>>) -> Vec<Profile> {
 
 #[tauri::command]
 pub fn remove_profile(state: State<'_, Arc<AppState>>, id: String) -> AppResult<()> {
+    if let Some(profile) = state.profiles.get(&id) {
+        state.epg.delete(&profile.server, &profile.username)?;
+    }
     secrets::delete(&state.data_dir, &id)?;
     state.library.delete(&id)?;
     state.profiles.remove(&id)
@@ -97,6 +102,7 @@ pub fn remove_profile(state: State<'_, Arc<AppState>>, id: String) -> AppResult<
 pub async fn logout(state: State<'_, Arc<AppState>>) -> AppResult<()> {
     *state.session.write().await = None;
     state.library.close();
+    state.epg.close();
     state.profiles.set_active(None)
 }
 
@@ -128,6 +134,69 @@ pub async fn stream_url(
         file,
         state.proxy_token
     ))
+}
+
+/// A relay URL for `duration` minutes of a channel's archive from `start`
+/// (`YYYY-MM-DD:HH-MM` in the panel's time zone).
+#[tauri::command]
+pub async fn catchup_url(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    start: String,
+    duration: u32,
+) -> AppResult<String> {
+    state.credentials().await?;
+    let file = format!("{id}.ts");
+    parse_file(&file).ok_or_else(|| AppError::InvalidInput(file.clone()))?;
+    if !xtream::is_timeshift_start(&start) || !(1..=MAX_CATCHUP_MINUTES).contains(&duration) {
+        return Err(AppError::InvalidInput(format!(
+            "{start} for {duration} minutes"
+        )));
+    }
+    Ok(format!(
+        "http://127.0.0.1:{}/timeshift/{duration}/{start}/{file}?t={}",
+        state.proxy_port, state.proxy_token
+    ))
+}
+
+/// Longest recording the relay asks for: a full day.
+pub const MAX_CATCHUP_MINUTES: u32 = 24 * 60;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuideWindow {
+    /// When the guide was downloaded, in Unix seconds.
+    pub updated_at: u64,
+    /// By the requested channel id; channels without programmes are left out.
+    pub programmes: HashMap<String, Vec<Programme>>,
+}
+
+/// Programmes of the XMLTV `channels` that overlap `from..to` (Unix seconds).
+/// The guide is downloaded on first use and cached; `refresh` downloads it again.
+#[tauri::command]
+pub async fn epg_guide(
+    state: State<'_, Arc<AppState>>,
+    channels: Vec<String>,
+    from: i64,
+    to: i64,
+    refresh: Option<bool>,
+) -> AppResult<GuideWindow> {
+    let creds = state.credentials().await?;
+    let guide = state
+        .epg
+        .guide(&state.http, &creds, refresh.unwrap_or(false))
+        .await?;
+    let programmes = channels
+        .into_iter()
+        .filter_map(|channel| {
+            let list = guide.between(&channel, from, to);
+            (!list.is_empty()).then_some((channel, list))
+        })
+        .collect();
+    Ok(GuideWindow {
+        updated_at: guide.updated_at,
+        programmes,
+    })
 }
 
 #[tauri::command]

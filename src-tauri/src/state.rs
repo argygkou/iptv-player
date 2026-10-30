@@ -4,6 +4,7 @@ use std::time::Duration;
 use rand::Rng;
 use tokio::sync::RwLock;
 
+use crate::epg::EpgStore;
 use crate::error::{AppError, AppResult};
 use crate::library::LibraryStore;
 use crate::profiles::ProfileStore;
@@ -18,6 +19,8 @@ pub struct AppState {
     pub profiles: ProfileStore,
     /// Favourites and history of the signed-in account.
     pub library: LibraryStore,
+    /// The full TV guide of the signed-in account.
+    pub epg: EpgStore,
     /// App data directory; holds profiles, libraries and, on Linux, the secrets file.
     pub data_dir: PathBuf,
     pub proxy_port: u16,
@@ -38,6 +41,7 @@ impl AppState {
             session: RwLock::new(None),
             profiles: ProfileStore::load(&data_dir),
             library: LibraryStore::new(&data_dir),
+            epg: EpgStore::new(&data_dir),
             data_dir,
             proxy_port,
             proxy_token: random_hex(16),

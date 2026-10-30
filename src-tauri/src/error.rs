@@ -11,7 +11,7 @@ pub enum AppError {
     #[error("Invalid request: {0}")]
     InvalidInput(String),
     #[error("Network error: {0}")]
-    Http(#[from] reqwest::Error),
+    Http(reqwest::Error),
     #[error("Unexpected response from provider: {0}")]
     Decode(#[from] serde_json::Error),
     #[error("Unknown profile")]
@@ -20,8 +20,18 @@ pub enum AppError {
     MissingSecret,
     #[error("Playback failed: {0}")]
     Playback(String),
+    #[error("TV guide unavailable: {0}")]
+    Epg(String),
     #[error("Could not save app data: {0}")]
     Storage(String),
+}
+
+/// Xtream URLs carry the password, so it is dropped before an error can reach
+/// a log or the webview.
+impl From<reqwest::Error> for AppError {
+    fn from(err: reqwest::Error) -> Self {
+        Self::Http(err.without_url())
+    }
 }
 
 impl From<std::io::Error> for AppError {

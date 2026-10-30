@@ -1,10 +1,11 @@
 import { Injectable } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 
-import { toProgramme } from './epg';
+import { fromGuide, toProgramme } from './epg';
 import {
   Category,
   Credentials,
+  GuideWindow,
   LiveStream,
   Profile,
   Programme,
@@ -112,6 +113,39 @@ export class XtreamApi {
       limit,
     });
     return (response?.epg_listings ?? []).map(toProgramme);
+  }
+
+  /**
+   * Programmes of the given XMLTV channel ids that overlap `from`..`to`, from
+   * the provider's full guide. The backend downloads it on first use and keeps
+   * it for 12 hours; `refresh` downloads it again.
+   */
+  async guide(
+    channelIds: string[],
+    from: Date,
+    to: Date,
+    refresh = false,
+  ): Promise<{ updatedAt: Date; programmes: Map<string, Programme[]> }> {
+    const window = await invoke<GuideWindow>('epg_guide', {
+      channels: channelIds,
+      from: Math.floor(from.getTime() / 1000),
+      to: Math.ceil(to.getTime() / 1000),
+      refresh,
+    });
+    return {
+      updatedAt: new Date(window.updatedAt * 1000),
+      programmes: new Map(
+        Object.entries(window.programmes).map(([id, list]) => [id, list.map(fromGuide)]),
+      ),
+    };
+  }
+
+  /**
+   * A relay URL for a channel's recording: `minutes` from `start`, which is
+   * `YYYY-MM-DD:HH-MM` in the panel's time zone (see `panelTime`).
+   */
+  catchupUrl(streamId: XtreamId, start: string, minutes: number): Promise<string> {
+    return invoke<string>('catchup_url', { id: String(streamId), start, duration: minutes });
   }
 
   /** A local relay URL the player can load; credentials stay in the backend. */

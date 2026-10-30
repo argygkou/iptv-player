@@ -11,8 +11,13 @@ Windows is the first target; Linux and iOS are planned (see [Roadmap](#roadmap))
   opens straight on Live TV. Several accounts can be saved and picked on the sign-in screen.
 - **Native playback** through libmpv: MKV, HEVC, AC3/DTS, subtitles and audio tracks all play. mpv's on-screen
   controller ([ModernZ](https://github.com/Samillion/ModernZ)) handles seeking, volume and track selection; double-click or press `F` for fullscreen, `Esc` to leave it.
-- **Live TV**: categories, channel search, now/next EPG with progress.
-- **TV Guide**: a timeline grid per category (six hours around now); click a channel to watch it.
+  On Live TV, the controller's title names the programme, and a now/next banner appears on entering fullscreen and on `I`.
+- **Live TV**: categories, channel search, the channel's programmes with progress. In a window wider than 2:1, the
+  programmes sit beside the player, in fullscreen too.
+- **TV Guide**: the provider's full XMLTV guide as a timeline grid per category, six hours at a time, with
+  Earlier/Later to move up to a week either way. Click a channel or what is on now to watch it.
+- **Catch-up**: on channels the provider records (`tv_archive`), past programmes are marked ⟲ in the guide and
+  have a Watch button on Live TV; the programme on now can start over.
 - **Movies**: category browser, poster grid with search and incremental rendering, details and playback.
 - **Series**: category browser, seasons and episodes, playback.
 - **My List**: favourite channels, movies and series (☆ on a channel, movie or series), recently watched
@@ -34,7 +39,8 @@ src-tauri/                   Rust backend
   src/proxy.rs               Local stream relay on 127.0.0.1
   src/player/                libmpv binding and the native video window (Windows)
   src/library.rs             Per-profile favourites and watch history
-  src/commands.rs            login / logout / xtream / stream_url / library commands
+  src/epg.rs                 XMLTV guide download, cache and parser
+  src/commands.rs            login / logout / xtream / stream_url / catchup_url / epg_guide / library commands
 ```
 
 **Why the provider is called from Rust.** Xtream panels are usually plain `http://` and send no CORS headers,
@@ -49,6 +55,16 @@ sign-in but stops auto sign-in; the ✕ on the sign-in screen deletes it and its
 directory, opened on sign-in; a one-off sign-in keeps them in memory only. The player saves the position of a
 movie or episode every 10 seconds and when it closes (mpv's `time-pos`, or the `<video>` element's
 `currentTime`), and reopens it with mpv's per-file `start` option. Near the end counts as watched.
+
+**TV guide.** The backend downloads `xmltv.php` once (streamed to `epg/<account hash>.xml` in the app data
+directory, gzipped or not), parses it into memory, and answers the webview with just the programmes of the
+channels and hours on screen. The file is used for 12 hours, then downloaded again; "Update guide" forces it,
+and a failed download keeps using the older file. Channels are matched by `epg_channel_id`. Channels the
+guide does not cover, and panels without `xmltv.php`, fall back to `get_short_epg` (now and next only).
+
+**Catch-up.** Recordings play through the relay from the panel's
+`timeshift/<user>/<pass>/<minutes>/<YYYY-MM-DD:HH-MM>/<id>.ts` URL. The start time is written in the panel's
+own time zone (`server_info.timezone`), so the guide's absolute times are converted with `Intl` first.
 
 **Why there is a local relay.** The same restrictions apply to media: mpegts.js needs to `fetch()` the
 live stream, and an https app origin would block `http://` media entirely. The backend starts a small axum
@@ -124,10 +140,10 @@ installer with a code-signing certificate. See the
   builds (pinned to release `20261021` and checked by SHA-256 in `scripts/fetch-libmpv.mjs`). Those builds are GPL-licensed, which matters if the
   app is ever distributed.
 - Native playback is Windows-only for now; elsewhere the webview player is used, with its codec limits.
-- The guide loads short EPG for the first 60 channels of a category.
+- If a panel expects catch-up start times in UTC rather than its own time zone, recordings start at the wrong
+  hour; none seen so far.
 
 ## Roadmap
 
-1. Full XMLTV EPG (`xmltv.php`) with a local cache, and catch-up for channels with `tv_archive`.
-2. Microsoft Store submission and auto-updates for the direct download.
-3. Linux packages (`.deb`, AppImage) with native playback, then iOS through Tauri's mobile target.
+1. Microsoft Store submission and auto-updates for the direct download.
+2. Linux packages (`.deb`, AppImage) with native playback, then iOS through Tauri's mobile target.

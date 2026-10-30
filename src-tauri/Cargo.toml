@@ -24,10 +24,12 @@ log = "0.4"
 thiserror = "2"
 url = "2.5"
 rand = "0.9"
-tokio = { version = "1", features = ["net", "sync"] }
+tokio = { version = "1", features = ["fs", "io-util", "net", "sync"] }
 axum = "0.8"
 futures-util = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "gzip"] }
+quick-xml = { version = "0.42", features = ["escape-html"] }
+flate2 = "1.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }

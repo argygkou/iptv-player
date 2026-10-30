@@ -9,9 +9,26 @@
       }
     </select>
   </label>
+  <div class="nav">
+    <button type="button" (click)="move(-step)" [disabled]="!canGoEarlier()">◀ Earlier</button>
+    <button type="button" (click)="shift.set(0)" [disabled]="shift() === 0">Now</button>
+    <button type="button" (click)="move(step)" [disabled]="!canGoLater()">Later ▶</button>
+    <span class="day">{{ windowStart() | date: 'EEE d MMM' }}</span>
+  </div>
   @if (channels.isLoading() || guide.isLoading()) {
     <span class="muted">Loading guide…</span>
   }
+  <span class="spacer"></span>
+  @if (tvGuide.updatedAt(); as updatedAt) {
+    <span class="muted" [title]="tvGuide.error() ?? ''"
+      >Guide from {{ updatedAt | date: 'EEE HH:mm' }}</span
+    >
+  } @else if (tvGuide.error(); as error) {
+    <span class="muted" [title]="error">Full guide unavailable, showing now and next</span>
+  }
+  <button type="button" (click)="refresh()" [disabled]="refreshing()">
+    {{ refreshing() ? 'Updating…' : 'Update guide' }}
+  </button>
 </div>
 
 <div class="grid">
@@ -40,24 +57,38 @@
         </button>
         <div class="programmes">
           @for (item of programmes(stream); track item.programme.start.getTime()) {
-            <div
+            <button
+              type="button"
               class="programme"
               [class.airing]="
                 item.programme.start.getTime() <= now() && now() < item.programme.end.getTime()
               "
+              [class.catchup]="item.action === 'catchup'"
+              [disabled]="!item.action"
               [style.left.px]="item.block.left"
               [style.width.px]="item.block.width"
-              [title]="item.programme.description"
+              [title]="
+                (item.action === 'catchup' ? 'Watch the recording. ' : '') +
+                item.programme.description
+              "
+              (click)="open(stream, item.programme, item.action)"
             >
-              <strong>{{ item.programme.title }}</strong>
+              <strong>
+                @if (item.action === 'catchup') {
+                  <span class="replay" aria-label="Catch-up">⟲</span>
+                }
+                {{ item.programme.title }}</strong
+              >
               <small
                 >{{ item.programme.start | date: 'HH:mm' }}–{{
                   item.programme.end | date: 'HH:mm'
                 }}</small
               >
-            </div>
+            </button>
           }
-          <div class="now" [style.left.px]="nowOffset()"></div>
+          @if (showsNow()) {
+            <div class="now" [style.left.px]="nowOffset()"></div>
+          }
         </div>
       </div>
     }

@@ -14,11 +14,21 @@ $row-height: 64px;
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border);
 
-  label {
+  label,
+  .nav {
     display: flex;
     align-items: center;
     gap: 0.5rem;
   }
+}
+
+.day {
+  min-width: 7rem;
+  font-weight: 600;
+}
+
+.spacer {
+  flex: 1;
 }
 
 .muted {
@@ -112,8 +122,25 @@ $row-height: 64px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
   white-space: nowrap;
   text-overflow: ellipsis;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--surface-hover);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 1;
+  }
+
+  &.catchup {
+    border-style: dashed;
+  }
 
   &.airing {
     background: var(--accent-soft);
@@ -128,6 +155,10 @@ $row-height: 64px;
 
   small {
     color: var(--text-muted);
+  }
+
+  .replay {
+    color: var(--accent);
   }
 }
 

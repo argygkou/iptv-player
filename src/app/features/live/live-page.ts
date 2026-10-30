@@ -1,18 +1,32 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, formatDate } from '@angular/common';
 import {
+  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   input,
+  LOCALE_ID,
   resource,
   signal,
+  viewChild,
 } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { LibraryStore } from '../../core/library/library-store';
 import { LibraryItem, libraryKey } from '../../core/library/library.models';
-import { isAiring, progress } from '../../core/xtream/epg';
+import { SessionStore } from '../../core/session/session-store';
+import {
+  archiveDays,
+  canCatchUp,
+  catchupMinutes,
+  isAiring,
+  nowAndNext,
+  panelTime,
+  progress,
+} from '../../core/xtream/epg';
+import { TvGuide } from '../../core/xtream/tv-guide';
 import { XtreamApi } from '../../core/xtream/xtream-api';
 import { LiveStream, Programme } from '../../core/xtream/xtream.models';
 import { CategoryList } from '../../shared/category-list';
@@ -20,7 +34,13 @@ import { FavouriteButton } from '../../shared/favourite-button';
 import { Clock } from '../../shared/clock';
 import { FAVOURITES, isSavedList, RECENT } from '../../shared/saved-lists';
 import { filterByName } from '../../shared/search';
+import { NativePlayback, PlayerInfo } from '../../shared/player/native-playback';
 import { VideoPlayer } from '../../shared/player/video-player';
+
+const HOUR = 60 * 60 * 1000;
+/** How far back the programme list goes on a channel with catch-up. */
+const CATCHUP_LIST_HOURS = 24;
+const UPCOMING_HOURS = 12;
 
 @Component({
   selector: 'app-live-page',
@@ -32,12 +52,19 @@ import { VideoPlayer } from '../../shared/player/video-player';
 export class LivePage {
   private readonly api = inject(XtreamApi);
   private readonly router = inject(Router);
+  private readonly session = inject(SessionStore);
+  private readonly tvGuide = inject(TvGuide);
+  private readonly locale = inject(LOCALE_ID);
   protected readonly clock = inject(Clock);
   protected readonly library = inject(LibraryStore);
+  protected readonly fullscreen = inject(NativePlayback).fullscreen;
 
   /** Query params, bound through `withComponentInputBinding`. */
   readonly category = input<string>();
   readonly channel = input<string>();
+  /** Catch-up: start and end of the recorded programme, in Unix seconds. */
+  readonly catchup = input<string>();
+  readonly until = input<string>();
 
   protected readonly search = signal('');
   protected readonly extras = [FAVOURITES, RECENT];
@@ -61,11 +88,41 @@ export class LivePage {
     return streams;
   });
   protected readonly visibleStreams = computed(() => filterByName(this.listed(), this.search()));
-  protected readonly selected = computed(() => {
-    const id = this.channel();
-    return this.streams.hasValue()
-      ? this.streams.value().find((s) => String(s.stream_id) === id)
+  /** Every channel, so the one playing stays known while another category is browsed. */
+  private readonly allStreams = resource({
+    params: () => this.channel(),
+    loader: () => this.api.liveStreams(),
+  });
+  protected readonly selected = computed(
+    () => {
+      const id = this.channel();
+      const find = (list: LiveStream[]) => list.find((s) => String(s.stream_id) === id);
+      return (
+        (this.allStreams.hasValue() ? find(this.allStreams.value()) : undefined) ??
+        (this.streams.hasValue() ? find(this.streams.value()) : undefined)
+      );
+    },
+    // The same channel from another list is not a change; it would reload its guide.
+    { equal: (a, b) => a?.stream_id === b?.stream_id },
+  );
+
+  /** The recorded programme being watched instead of the live channel. */
+  protected readonly recording = computed<Programme | undefined>(() => {
+    const [start, end] = [Number(this.catchup()), Number(this.until())];
+    if (!start || !end || end <= start) {
+      return undefined;
+    }
+    const programme = this.epg.hasValue()
+      ? this.epg.value().find((p) => p.start.getTime() === start * 1000)
       : undefined;
+    return (
+      programme ?? {
+        title: 'Catch-up',
+        description: '',
+        start: new Date(start * 1000),
+        end: new Date(end * 1000),
+      }
+    );
   });
 
   /** The selected channel as the library stores it. */
@@ -82,16 +139,117 @@ export class LivePage {
   });
 
   protected readonly playback = resource({
-    params: () => this.channel(),
-    loader: ({ params }) => this.api.streamUrl('live', params, 'ts'),
+    params: () => {
+      const channel = this.channel();
+      const [start, end] = [Number(this.catchup()), Number(this.until())];
+      if (!channel) {
+        return undefined;
+      }
+      return {
+        channel,
+        catchup: start && end > start ? { start, end } : undefined,
+        timeZone: this.session.account()?.server_info.timezone,
+      };
+    },
+    loader: ({ params: { channel, catchup, timeZone } }) => {
+      if (!catchup) {
+        return this.api.streamUrl('live', channel, 'ts');
+      }
+      const programme = {
+        title: '',
+        description: '',
+        start: new Date(catchup.start * 1000),
+        end: new Date(catchup.end * 1000),
+      };
+      return this.api.catchupUrl(
+        channel,
+        panelTime(programme.start, timeZone),
+        catchupMinutes(programme),
+      );
+    },
   });
+
+  /**
+   * The channel's programmes: from now (or from a day back with catch-up) to
+   * 12 hours ahead. "Now" is read when the channel changes, not on every tick.
+   */
   protected readonly epg = resource({
-    params: () => this.channel(),
-    loader: ({ params }) => this.api.shortEpg(params, 6),
+    params: () => {
+      const stream = this.selected();
+      return stream && { stream, version: this.tvGuide.version() };
+    },
+    loader: async ({ params: { stream }, abortSignal }) => {
+      const now = Date.now();
+      const back = archiveDays(stream) > 0 ? CATCHUP_LIST_HOURS : 0;
+      const guide = await this.tvGuide.programmes(
+        [stream],
+        new Date(now - back * HOUR),
+        new Date(now + UPCOMING_HOURS * HOUR),
+        abortSignal,
+      );
+      return guide.get(String(stream.stream_id)) ?? [];
+    },
   });
+  /** Without catch-up, past programmes are of no use. */
+  protected readonly programmes = computed(() => {
+    const list = this.epg.hasValue() ? this.epg.value() : [];
+    const stream = this.selected();
+    const now = this.clock.now();
+    return stream && archiveDays(stream) > 0 ? list : list.filter((p) => p.end > now);
+  });
+
+  /** The guide for the fullscreen player, which hides this page. */
+  protected readonly playerInfo = computed<PlayerInfo | undefined>(() => {
+    const stream = this.selected();
+    if (!stream) {
+      return undefined;
+    }
+    const line = (label: string, p: Programme) =>
+      `${label} ${this.time(p.start)}–${this.time(p.end)}  ${p.title}`;
+    const recording = this.recording();
+    if (recording) {
+      return {
+        title: `${stream.name}: ${recording.title}`,
+        details: `${stream.name}\n${line('Catch-up', recording)}`,
+      };
+    }
+    const { current, next } = nowAndNext(this.programmes(), this.clock.now());
+    return {
+      title: current ? `${stream.name}: ${current.title}` : stream.name,
+      details: [stream.name, current && line('Now', current), next && line('Next', next)]
+        .filter(Boolean)
+        .join('\n'),
+    };
+  });
+
+  private readonly epgList = viewChild<ElementRef<HTMLElement>>('epgList');
 
   protected readonly isAiring = (p: Programme) => isAiring(p, this.clock.now());
   protected readonly progress = (p: Programme) => progress(p, this.clock.now());
+  protected readonly canCatchUp = (p: Programme) => {
+    const stream = this.selected();
+    return !!stream && canCatchUp(stream, p, this.clock.now());
+  };
+  protected readonly isPlaying = (p: Programme) =>
+    this.recording()?.start.getTime() === p.start.getTime();
+
+  constructor() {
+    // Bring what is on (or the recording being watched) into view, past the archive above it.
+    // Not on every clock tick, so reading ahead is not interrupted.
+    afterRenderEffect(() => {
+      if (this.epg.hasValue()) {
+        this.epg.value();
+      }
+      this.recording();
+      this.fullscreen();
+      const list = this.epgList()?.nativeElement;
+      const current =
+        list?.querySelector<HTMLElement>('.playing') ?? list?.querySelector<HTMLElement>('.airing');
+      if (list && current) {
+        list.scrollTop += current.getBoundingClientRect().top - list.getBoundingClientRect().top;
+      }
+    });
+  }
 
   protected selectCategory(categoryId: string | null): void {
     void this.router.navigate([], {
@@ -102,10 +260,32 @@ export class LivePage {
 
   protected selectChannel(stream: LiveStream): void {
     void this.router.navigate([], {
-      queryParams: { channel: String(stream.stream_id) },
+      queryParams: { channel: String(stream.stream_id), catchup: null, until: null },
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
+  }
+
+  /** Plays the programme's recording; the one on now starts over. */
+  protected watchRecording(programme: Programme): void {
+    void this.router.navigate([], {
+      queryParams: {
+        catchup: Math.floor(programme.start.getTime() / 1000),
+        until: Math.floor(programme.end.getTime() / 1000),
+      },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  protected backToLive(): void {
+    void this.router.navigate([], {
+      queryParams: { catchup: null, until: null },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  private time(date: Date): string {
+    return formatDate(date, 'HH:mm', this.locale);
   }
 
   protected channelId(stream: LiveStream): string {

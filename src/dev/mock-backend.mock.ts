@@ -39,7 +39,9 @@ const liveStreams = liveCategories.flatMap((c, ci) =>
     stream_icon: art(`CH${ci * 12 + i + 1}`, (ci * 70 + i * 9) % 360, [4, 3]),
     epg_channel_id: `ch${ci * 12 + i}`,
     category_id: c.category_id,
-    tv_archive: 0,
+    // The news channels have catch-up, to preview recordings.
+    tv_archive: c.category_id === '1' ? 1 : 0,
+    tv_archive_duration: c.category_id === '1' ? 3 : 0,
   })),
 );
 
@@ -70,6 +72,25 @@ const epg = (streamId: number, limit: number) => {
       };
     }),
   };
+};
+
+/** Full-guide programmes of `epg_channel_id` `chN` (stream `100 + N`) overlapping from..to. */
+const guide = (channel: string, from: number, to: number) => {
+  const streamId = 100 + Number(channel.slice(2));
+  const offset = (streamId % 6) * 600;
+  const first = Math.floor((from - offset) / 2700);
+  const list = [];
+  for (let k = first; offset + k * 2700 < to; k++) {
+    const start = offset + k * 2700;
+    const title = shows[(((streamId + k) % shows.length) + shows.length) % shows.length];
+    list.push({
+      start,
+      end: start + 2700,
+      title,
+      description: `An episode of ${title}. Mock guide data.`,
+    });
+  }
+  return list.filter((p) => p.end > from);
 };
 
 const movieCategories = [
@@ -206,6 +227,15 @@ const handlers: Record<string, (args: Args) => unknown> = {
     return null;
   },
   stream_url: () => SAMPLE_VIDEO,
+  catchup_url: () => SAMPLE_VIDEO,
+  epg_guide: ({ channels, from, to }) => ({
+    updatedAt: now,
+    programmes: Object.fromEntries(
+      (channels as string[])
+        .filter((id) => /^ch\d+$/.test(id))
+        .map((id) => [id, guide(id, from, to)]),
+    ),
+  }),
   library_get: () => loadLibrary(),
   library_set_favourite: ({ item, favourite }) =>
     updateLibrary((library) => {

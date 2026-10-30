@@ -14,7 +14,7 @@ import {
 import { Progress } from '../../core/library/library.models';
 
 import { measure } from './bounds';
-import { NativePlayback } from './native-playback';
+import { NativePlayback, PlayerInfo } from './native-playback';
 import { PROGRESS_INTERVAL } from './progress';
 
 /**
@@ -45,7 +45,7 @@ import { PROGRESS_INTERVAL } from './progress';
     }
     :host(.fullscreen) {
       position: fixed;
-      inset: 0;
+      inset: 0 var(--player-aside, 0) 0 0;
       z-index: 1000;
     }
     .error {
@@ -69,6 +69,8 @@ export class NativeVideoPlayer {
   readonly start = input(0);
   /** Receives the position of a movie or episode while it plays and when it closes. */
   readonly onProgress = input<(progress: Progress) => void>();
+  /** Without it, mpv goes back to the file's own title. */
+  readonly info = input<PlayerInfo>();
 
   protected readonly playback = inject(NativePlayback);
   private readonly failed = signal<string | null>(null);
@@ -110,6 +112,12 @@ export class NativeVideoPlayer {
         sample();
       };
       onCleanup(() => finish?.());
+    });
+
+    // After the effect above, whose first `open()` is what creates mpv.
+    effect(() => {
+      const info = this.info() ?? { title: '', details: '' };
+      this.playback.setInfo(info).catch(() => undefined);
     });
 
     let last = '';

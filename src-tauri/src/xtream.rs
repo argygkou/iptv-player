@@ -38,6 +38,15 @@ impl Credentials {
         url
     }
 
+    /// The provider's full XMLTV guide.
+    pub fn xmltv_url(&self) -> Url {
+        let mut url = self.base.join("xmltv.php").expect("static path");
+        url.query_pairs_mut()
+            .append_pair("username", &self.username)
+            .append_pair("password", &self.password);
+        url
+    }
+
     /// Direct upstream URL for a playable stream. Only ever used by the local proxy.
     pub fn stream_url(&self, kind: StreamKind, id: &str, ext: &str) -> Url {
         let path = format!(
@@ -50,6 +59,33 @@ impl Credentials {
         );
         self.base.join(&path).expect("validated segments")
     }
+
+    /// Upstream URL for a recorded programme of a channel with `tv_archive`:
+    /// `duration` minutes from `start`, which is `YYYY-MM-DD:HH-MM` in the
+    /// panel's time zone. Only ever used by the local proxy.
+    pub fn timeshift_url(&self, duration: u32, start: &str, id: &str, ext: &str) -> Url {
+        let path = format!(
+            "timeshift/{}/{}/{}/{}/{}.{}",
+            urlencode(&self.username),
+            urlencode(&self.password),
+            duration,
+            start,
+            id,
+            ext
+        );
+        self.base.join(&path).expect("validated segments")
+    }
+}
+
+/// Whether `start` is a catch-up start time, `YYYY-MM-DD:HH-MM`.
+pub fn is_timeshift_start(start: &str) -> bool {
+    let bytes = start.as_bytes();
+    bytes.len() == 16
+        && bytes.iter().enumerate().all(|(i, b)| match i {
+            4 | 7 | 13 => *b == b'-',
+            10 => *b == b':',
+            _ => b.is_ascii_digit(),
+        })
 }
 
 /// Accepts `host:port`, `http://host:port`, or a pasted `.../player_api.php?...` URL.
@@ -240,6 +276,24 @@ mod tests {
     #[test]
     fn rejects_other_schemes() {
         assert!(normalize_server("ftp://example.com").is_err());
+    }
+
+    #[test]
+    fn builds_timeshift_url() {
+        let creds = Credentials::new("example.com:8080", "user", "p@ss").unwrap();
+        let url = creds.timeshift_url(60, "2026-10-30:20-00", "7", "ts");
+        assert_eq!(
+            url.as_str(),
+            "http://example.com:8080/timeshift/user/p%40ss/60/2026-10-30:20-00/7.ts"
+        );
+    }
+
+    #[test]
+    fn validates_timeshift_starts() {
+        assert!(is_timeshift_start("2026-10-30:20-00"));
+        assert!(!is_timeshift_start("2026-10-30 20:00"));
+        assert!(!is_timeshift_start("2026-10-30:20-0/"));
+        assert!(!is_timeshift_start("../../../../../x"));
     }
 
     #[test]

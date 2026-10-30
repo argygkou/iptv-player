@@ -11,6 +11,14 @@ interface PlaybackError {
   message: string;
 }
 
+/** What mpv shows about the stream, as the page is out of sight in fullscreen. */
+export interface PlayerInfo {
+  /** For the title on mpv's controller. */
+  title: string;
+  /** For the banner shown on entering fullscreen and on `i`; may span lines. */
+  details: string;
+}
+
 /**
  * Client for the libmpv player in the Rust backend. There is one native video
  * window, so calls are queued: a `stop()` from a destroyed player can never be
@@ -59,6 +67,10 @@ export class NativePlayback {
         await invoke('player_set_bounds', { bounds: latest });
       }
     });
+  }
+
+  setInfo({ title, details }: PlayerInfo): Promise<void> {
+    return this.enqueue(() => invoke('player_set_info', { title, details }));
   }
 
   /** Where the current file is; `null` when nothing is playing. */

@@ -292,6 +292,18 @@ mod tests {
     }
 
     #[test]
+    fn accepts_the_info_banner() {
+        let Some(mpv) = bundled() else { return };
+        mpv.set_property("force-media-title", "News").unwrap();
+        mpv.set_property(crate::player::INFO, "Now 20:00 News\nNext 21:00 Film")
+            .unwrap();
+        mpv.command(&["keybind", "i", "show-text \"${user-data/app/info:}\" 6000"])
+            .unwrap();
+        mpv.command(&["show-text", "${user-data/app/info:}", "6000"])
+            .unwrap();
+    }
+
+    #[test]
     fn reads_numeric_properties() {
         let Some(mpv) = bundled() else { return };
         assert_eq!(mpv.get_double("volume"), Ok(100.0));
