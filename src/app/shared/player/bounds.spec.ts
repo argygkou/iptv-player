@@ -38,4 +38,18 @@ describe('bounds', () => {
     expect(bounds.visible).toEqual({ x: 0, y: 100, width: 480, height: 220 });
     scroller.remove();
   });
+
+  it('does not clip a fixed element to its ancestors', () => {
+    const main = document.createElement('main');
+    main.style.overflow = 'hidden';
+    const player = document.createElement('div');
+    player.style.position = 'fixed';
+    main.append(player);
+    document.body.append(main);
+    main.getBoundingClientRect = () => ({ x: 220, y: 0, width: 800, height: 768 }) as DOMRect;
+    player.getBoundingClientRect = () => ({ x: 0, y: 0, width: 1024, height: 768 }) as DOMRect;
+
+    expect(measure(player).visible).toEqual({ x: 0, y: 0, width: 1024, height: 768 });
+    main.remove();
+  });
 });

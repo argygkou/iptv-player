@@ -15,7 +15,7 @@ import { WebVideoPlayer } from './web-video-player';
   template: `
     @if (native.hasValue()) {
       @if (native.value()) {
-        <app-native-video-player [src]="src()" />
+        <app-native-video-player [src]="src()" [live]="live()" />
       } @else {
         <app-web-video-player [src]="src()" [live]="live()" />
       }

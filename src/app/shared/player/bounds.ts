@@ -40,7 +40,13 @@ export function measure(element: HTMLElement): Bounds {
     width: window.innerWidth,
     height: window.innerHeight,
   });
-  for (let parent = element.parentElement; parent && visible; parent = parent.parentElement) {
+  // A fixed element (the fullscreen player) escapes its ancestors' clipping.
+  const fixed = getComputedStyle(element).position === 'fixed';
+  for (
+    let parent = fixed ? null : element.parentElement;
+    parent && visible;
+    parent = parent.parentElement
+  ) {
     if (CLIPS.test(getComputedStyle(parent).overflow)) {
       visible = intersect(visible, toRect(parent.getBoundingClientRect()));
     }

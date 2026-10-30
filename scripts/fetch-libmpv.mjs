@@ -3,9 +3,12 @@
 // `npm run bundle`; does nothing off Windows or when the DLL is already there.
 //
 // The DLL comes from the mpv-dev builds at
-// https://github.com/shinchiro/mpv-winbuild-cmake/releases. Set MPV_RELEASE to a
-// release tag to pin one; the latest release is used otherwise.
+// https://github.com/shinchiro/mpv-winbuild-cmake/releases. RELEASE pins the
+// build and SHA256 is the expected hash of its archive; MPV_RELEASE and
+// MPV_SHA256 override both (an empty MPV_SHA256 skips the check, for trying a
+// new release and reading its hash from the output).
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -17,6 +20,8 @@ const REPO = 'shinchiro/mpv-winbuild-cmake';
 const DLL = 'libmpv-2.dll';
 // x86_64 builds without the `-v3` suffix run on any 64-bit CPU.
 const ASSET = /^mpv-dev-x86_64-\d{8}-git-[0-9a-f]+\.7z$/;
+const RELEASE = null;
+const SHA256 = null;
 
 const target = join(dirname(fileURLToPath(import.meta.url)), '..', 'src-tauri', 'lib', DLL);
 
@@ -32,7 +37,8 @@ if (process.env.GITHUB_TOKEN) {
   headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
 }
 
-const tag = process.env.MPV_RELEASE;
+const tag = process.env.MPV_RELEASE ?? RELEASE;
+const expectedHash = process.env.MPV_SHA256 ?? SHA256;
 const releaseUrl = `https://api.github.com/repos/${REPO}/releases/${tag ? `tags/${tag}` : 'latest'}`;
 const release = await fetch(releaseUrl, { headers });
 if (!release.ok) {
@@ -55,7 +61,13 @@ if (!archive.ok) {
 const work = mkdtempSync(join(tmpdir(), 'libmpv-'));
 try {
   const file = join(work, asset.name);
-  writeFileSync(file, Buffer.from(await archive.arrayBuffer()));
+  const bytes = Buffer.from(await archive.arrayBuffer());
+  const hash = createHash('sha256').update(bytes).digest('hex');
+  console.log(`SHA-256 ${hash}`);
+  if (expectedHash && hash !== expectedHash) {
+    throw new Error(`${asset.name}: expected SHA-256 ${expectedHash}, got ${hash}`);
+  }
+  writeFileSync(file, bytes);
   execFileSync(sevenZip.path7za, ['e', file, `-o${work}`, DLL, '-y'], { stdio: 'ignore' });
   mkdirSync(dirname(target), { recursive: true });
   copyFileSync(join(work, DLL), target);

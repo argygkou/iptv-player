@@ -39,19 +39,33 @@ struct RawProperty {
 }
 
 const EVENT_SHUTDOWN: c_int = 1;
+const EVENT_START_FILE: c_int = 6;
 const EVENT_END_FILE: c_int = 7;
-const EVENT_FILE_LOADED: c_int = 8;
 const EVENT_PROPERTY_CHANGE: c_int = 22;
+const END_FILE_REASON_EOF: c_int = 0;
 const END_FILE_REASON_ERROR: c_int = 4;
 const FORMAT_FLAG: c_int = 3;
 
 /// Events the player reacts to; everything else is skipped.
 pub enum Event {
     Shutdown,
-    FileLoaded,
-    /// Playback stopped because the file could not be opened or decoded.
-    EndFileError(String),
+    /// A file from `loadfile` starts loading; one per successful `loadfile`.
+    StartFile,
+    /// The current file ended by itself, rather than through `stop` or a
+    /// replacing `loadfile`.
+    EndFile(Ended),
     Flag(String, bool),
+}
+
+pub enum Ended {
+    Eof,
+    /// The file could not be opened or decoded.
+    Error(String),
+}
+
+/// Whether `path` is a loadable libmpv with the entry points used here.
+pub fn probe(path: &Path) -> Result<(), String> {
+    Api::load(path).map(drop)
 }
 
 struct Api {
@@ -185,11 +199,16 @@ impl Mpv {
             let event = &*(self.api.wait_event)(self.handle, -1.0);
             match event.event_id {
                 EVENT_SHUTDOWN => Some(Event::Shutdown),
-                EVENT_FILE_LOADED => Some(Event::FileLoaded),
+                EVENT_START_FILE => Some(Event::StartFile),
                 EVENT_END_FILE => {
                     let end = &*(event.data as *const RawEndFile);
-                    (end.reason == END_FILE_REASON_ERROR)
-                        .then(|| Event::EndFileError(self.api.error(end.error)))
+                    match end.reason {
+                        END_FILE_REASON_EOF => Some(Event::EndFile(Ended::Eof)),
+                        END_FILE_REASON_ERROR => {
+                            Some(Event::EndFile(Ended::Error(self.api.error(end.error))))
+                        }
+                        _ => None,
+                    }
                 }
                 EVENT_PROPERTY_CHANGE => {
                     let property = &*(event.data as *const RawProperty);
@@ -233,6 +252,15 @@ mod tests {
     }
 
     #[test]
+    fn probes_the_library() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("lib")
+            .join(super::super::LIBRARY);
+        assert_eq!(probe(&path).is_ok(), path.is_file());
+        assert!(probe(Path::new("missing.dll")).is_err());
+    }
+
+    #[test]
     fn reports_flag_changes() {
         let Some(mpv) = bundled() else { return };
         mpv.observe_flag("pause").unwrap();
@@ -249,9 +277,10 @@ mod tests {
         // Nothing listens on the discard port, so the connection is refused.
         mpv.command(&["loadfile", "http://127.0.0.1:9/1.ts", "replace"])
             .unwrap();
-        let event = next(&mpv, |e| matches!(e, Event::EndFileError(_)));
-        let Event::EndFileError(message) = event else {
-            unreachable!()
+        next(&mpv, |e| matches!(e, Event::StartFile));
+        let event = next(&mpv, |e| matches!(e, Event::EndFile(_)));
+        let Event::EndFile(Ended::Error(message)) = event else {
+            panic!("expected an error")
         };
         assert!(!message.is_empty());
     }

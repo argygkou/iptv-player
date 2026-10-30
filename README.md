@@ -78,7 +78,8 @@ Run these from the repository root:
 
 ```powershell
 npm ci             # install dependencies (first time, and after package-lock.json changes)
-npm run fetch-libmpv  # download libmpv-2.dll into src-tauri\lib (dev and bundle also do this when it's missing)
+npm run fetch-libmpv  # download libmpv-2.dll into src-tauri\lib (dev and bundle also do this when it's missing;
+                      # plain cargo commands need it too, and fail to copy it while the app is running)
 npm run dev        # the desktop window with hot reload (first run compiles Rust and takes a few minutes)
 npm test           # Angular unit tests (Vitest)
 npm run bundle     # release build: NSIS .exe and .msi under src-tauri\target\release\bundle

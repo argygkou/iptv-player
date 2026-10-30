@@ -26,7 +26,10 @@ import { NativePlayback } from './native-playback';
   host: { '[class.fullscreen]': 'playback.fullscreen()' },
   template: `
     @if (message(); as message) {
-      <p class="error" role="alert">{{ message }}</p>
+      <div class="error" role="alert">
+        <p>{{ message }}</p>
+        <button type="button" (click)="retry()">Try again</button>
+      </div>
     }
   `,
   styles: `
@@ -42,18 +45,27 @@ import { NativePlayback } from './native-playback';
       z-index: 1000;
     }
     .error {
-      margin: 0;
+      display: grid;
+      justify-items: center;
+      gap: 0.75rem;
       padding: 1rem;
       color: var(--danger);
       text-align: center;
+
+      p {
+        margin: 0;
+      }
     }
   `,
 })
 export class NativeVideoPlayer {
   readonly src = input.required<string>();
+  readonly live = input(false);
 
   protected readonly playback = inject(NativePlayback);
   private readonly failed = signal<string | null>(null);
+  /** Bumped by "Try again": reopening the same URL is not a change of `src`. */
+  private readonly attempt = signal(0);
   protected readonly message = computed(() => {
     const error = this.failed() ?? this.playback.error();
     return error && `This stream could not be played (${error}).`;
@@ -63,9 +75,10 @@ export class NativeVideoPlayer {
     const element = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
 
     effect(() => {
-      const src = this.src();
+      const [src, live] = [this.src(), this.live()];
+      this.attempt();
       this.failed.set(null);
-      this.playback.open(src, measure(element)).catch((error: unknown) => {
+      this.playback.open(src, live, measure(element)).catch((error: unknown) => {
         this.failed.set(String(error));
         void this.playback.stop();
       });
@@ -87,5 +100,9 @@ export class NativeVideoPlayer {
       cancelAnimationFrame(frame);
       void this.playback.stop();
     });
+  }
+
+  protected retry(): void {
+    this.attempt.update((n) => n + 1);
   }
 }

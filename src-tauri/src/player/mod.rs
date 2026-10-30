@@ -14,10 +14,11 @@ mod mpv;
 #[cfg(windows)]
 mod surface;
 
+use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 #[cfg(windows)]
 use tauri::Manager;
 use tauri::{AppHandle, State, WebviewWindow};
@@ -78,6 +79,76 @@ impl Bounds {
     }
 }
 
+/// What `player_open` should play.
+#[derive(Debug, Deserialize)]
+#[cfg_attr(not(windows), allow(dead_code))]
+pub struct Media {
+    pub url: String,
+    /// Chosen by the webview, which uses it to match errors to this call.
+    pub generation: u64,
+    pub live: bool,
+}
+
+/// One `player_open` call: the id the webview gave it, and whether it is live.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Entry {
+    generation: u64,
+    live: bool,
+}
+
+/// Matches mpv's events to the `player_open` call they belong to, so an error
+/// from a stream the user already left is not blamed on the next one. mpv
+/// starts files in `loadfile` order, one `StartFile` event each.
+#[derive(Default)]
+#[cfg_attr(not(windows), allow(dead_code))]
+struct Tracker {
+    pending: Mutex<VecDeque<Entry>>,
+    current: Mutex<Option<Entry>>,
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+impl Tracker {
+    fn queued(&self, entry: Entry) {
+        lock(&self.pending).push_back(entry);
+    }
+
+    /// `loadfile` failed, so no `StartFile` will come for the last entry.
+    fn rejected(&self) {
+        lock(&self.pending).pop_back();
+    }
+
+    fn started(&self) {
+        let next = lock(&self.pending).pop_front();
+        *lock(&self.current) = next;
+    }
+
+    /// What to tell the webview when the current file ends by itself. A movie
+    /// reaching its end is normal; a live stream ending means it was lost.
+    fn ended(&self, error: Option<String>) -> Option<PlaybackError> {
+        let entry = (*lock(&self.current))?;
+        let message = match error {
+            Some(message) => message,
+            None if entry.live => "the live stream ended".into(),
+            None => return None,
+        };
+        Some(PlaybackError {
+            generation: entry.generation,
+            message,
+        })
+    }
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Payload of the `player://error` event.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct PlaybackError {
+    generation: u64,
+    message: String,
+}
+
 /// Lazily created mpv instance and its window.
 pub struct Player {
     library: Option<PathBuf>,
@@ -89,18 +160,31 @@ pub struct Player {
 struct Native {
     mpv: mpv::Mpv,
     surface: surface::Surface,
+    tracker: Arc<Tracker>,
 }
 
 impl Player {
-    /// `library` is the path of libmpv when it was found; without it every
-    /// command reports that native playback is unavailable.
+    /// `library` is the path of libmpv when it was found. It is only used when
+    /// it actually loads; otherwise the webview player takes over.
     pub fn new(library: Option<PathBuf>) -> Self {
         Self {
-            library: library.filter(|_| cfg!(windows)),
+            library: library.filter(|path| loads(path)),
             #[cfg(windows)]
             native: Default::default(),
         }
     }
+}
+
+#[cfg(windows)]
+fn loads(path: &std::path::Path) -> bool {
+    mpv::probe(path)
+        .inspect_err(|err| log::warn!("cannot load {}: {err}", path.display()))
+        .is_ok()
+}
+
+#[cfg(not(windows))]
+fn loads(_path: &std::path::Path) -> bool {
+    false
 }
 
 fn unavailable() -> AppError {
@@ -153,6 +237,13 @@ impl Native {
                 ("force-window", "yes"),
                 ("keep-open", "yes"),
                 ("hwdec", "auto-safe"),
+                // Reconnect dropped HTTP streams instead of ending playback.
+                (
+                    "stream-lavf-o",
+                    "reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=5",
+                ),
+                // Only relay URLs may be played; never files dropped on the video.
+                ("drag-and-drop", "no"),
                 ("osc", "yes"),
                 // Show the controller on any mouse movement over the video, not just
                 // the bottom half, and keep it up a little longer than mpv does.
@@ -169,25 +260,44 @@ impl Native {
         )
         .map_err(AppError::Playback)?;
         mpv.observe_flag("fullscreen").map_err(AppError::Playback)?;
+        // `q` would shut mpv down for good; the app owns the player's lifetime.
+        for key in ["q", "Q"] {
+            if let Err(err) = mpv.command(&["keybind", key, "ignore"]) {
+                log::warn!("cannot unbind {key}: {err}");
+            }
+        }
+        let tracker = Arc::new(Tracker::default());
         let (events, app, window) = (mpv.clone(), app.clone(), window.clone());
+        let track = tracker.clone();
         std::thread::Builder::new()
             .name("mpv-events".into())
-            .spawn(move || forward_events(&events, &app, &window))
+            .spawn(move || forward_events(&events, &track, &app, &window))
             .map_err(|err| AppError::Playback(err.to_string()))?;
-        Ok(Self { mpv, surface })
+        Ok(Self {
+            mpv,
+            surface,
+            tracker,
+        })
     }
 }
 
 /// Embedded mpv cannot go fullscreen itself, so its `fullscreen` property
 /// (the OSC button, double-click, `f`, `Esc`) drives the app window instead.
 #[cfg(windows)]
-fn forward_events(mpv: &mpv::Mpv, app: &AppHandle, window: &WebviewWindow) {
+fn forward_events(mpv: &mpv::Mpv, tracker: &Tracker, app: &AppHandle, window: &WebviewWindow) {
     use tauri::Emitter;
     loop {
         match mpv.wait_event() {
             Some(mpv::Event::Shutdown) => break,
-            Some(mpv::Event::EndFileError(message)) => {
-                let _ = app.emit("player://error", message);
+            Some(mpv::Event::StartFile) => tracker.started(),
+            Some(mpv::Event::EndFile(ended)) => {
+                let error = match ended {
+                    mpv::Ended::Eof => None,
+                    mpv::Ended::Error(message) => Some(message),
+                };
+                if let Some(payload) = tracker.ended(error) {
+                    let _ = app.emit("player://error", payload);
+                }
             }
             Some(mpv::Event::Flag(name, value)) if name == "fullscreen" => {
                 let _ = window.set_fullscreen(value);
@@ -210,9 +320,14 @@ pub async fn player_open(
     window: WebviewWindow,
     state: State<'_, Arc<AppState>>,
     player: State<'_, Player>,
-    url: String,
+    media: Media,
     bounds: Bounds,
 ) -> AppResult<()> {
+    let Media {
+        url,
+        generation,
+        live,
+    } = media;
     check_url(&state, &url)?;
     let library = player.library.as_deref().ok_or_else(unavailable)?;
     let native = player
@@ -220,10 +335,20 @@ pub async fn player_open(
         .get_or_try_init(|| Native::start(library, &window, &app))
         .await?;
     native.surface.place(&bounds);
+    // Movies stay on their last frame so they can be seeked back; a live
+    // stream that ends is gone, so let it end and report it.
     native
         .mpv
-        .command(&["loadfile", &url, "replace"])
-        .and_then(|()| native.mpv.set_property("pause", "no"))
+        .set_property("keep-open", if live { "no" } else { "yes" })
+        .map_err(AppError::Playback)?;
+    native.tracker.queued(Entry { generation, live });
+    if let Err(err) = native.mpv.command(&["loadfile", &url, "replace"]) {
+        native.tracker.rejected();
+        return Err(AppError::Playback(err));
+    }
+    native
+        .mpv
+        .set_property("pause", "no")
         .map_err(AppError::Playback)
 }
 
@@ -257,10 +382,10 @@ pub fn player_open(
     _window: WebviewWindow,
     state: State<'_, Arc<AppState>>,
     _player: State<'_, Player>,
-    url: String,
+    media: Media,
     _bounds: Bounds,
 ) -> AppResult<()> {
-    check_url(&state, &url)?;
+    check_url(&state, &media.url)?;
     Err(unavailable())
 }
 
@@ -325,9 +450,79 @@ mod tests {
         assert_eq!(empty.visible_region(), None);
     }
 
+    fn tracker_with(entries: &[Entry]) -> Tracker {
+        let tracker = Tracker::default();
+        for entry in entries {
+            tracker.queued(*entry);
+        }
+        tracker
+    }
+
+    const MOVIE: Entry = Entry {
+        generation: 1,
+        live: false,
+    };
+    const CHANNEL: Entry = Entry {
+        generation: 2,
+        live: true,
+    };
+
     #[test]
-    fn library_is_ignored_off_windows() {
-        let player = Player::new(Some(PathBuf::from(LIBRARY)));
-        assert_eq!(player.library.is_some(), cfg!(windows));
+    fn errors_belong_to_the_file_that_was_playing() {
+        let tracker = tracker_with(&[MOVIE, CHANNEL]);
+        tracker.started();
+        // The movie fails after the channel was already requested.
+        let error = tracker.ended(Some("loading failed".into()));
+        assert_eq!(error.map(|e| e.generation), Some(1));
+        tracker.started();
+        let error = tracker.ended(Some("loading failed".into()));
+        assert_eq!(error.map(|e| e.generation), Some(2));
+    }
+
+    #[test]
+    fn only_live_streams_report_their_end() {
+        let tracker = tracker_with(&[MOVIE, CHANNEL]);
+        tracker.started();
+        assert_eq!(tracker.ended(None), None);
+        tracker.started();
+        assert_eq!(
+            tracker.ended(None),
+            Some(PlaybackError {
+                generation: 2,
+                message: "the live stream ended".into()
+            })
+        );
+    }
+
+    #[test]
+    fn rejected_loads_are_forgotten() {
+        let tracker = tracker_with(&[MOVIE, CHANNEL]);
+        tracker.rejected();
+        tracker.started();
+        assert_eq!(
+            tracker.ended(Some("x".into())).map(|e| e.generation),
+            Some(1)
+        );
+        tracker.started();
+        assert_eq!(tracker.ended(Some("x".into())), None);
+    }
+
+    #[test]
+    fn nothing_is_reported_before_a_file_starts() {
+        assert_eq!(tracker_with(&[MOVIE]).ended(Some("x".into())), None);
+    }
+
+    #[test]
+    fn only_a_loadable_library_is_used() {
+        assert!(
+            Player::new(Some(PathBuf::from("missing.dll")))
+                .library
+                .is_none()
+        );
+        let bundled = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("lib")
+            .join(LIBRARY);
+        let expected = cfg!(windows) && bundled.is_file();
+        assert_eq!(Player::new(Some(bundled)).library.is_some(), expected);
     }
 }
