@@ -18,6 +18,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde::Deserialize;
+#[cfg(windows)]
+use tauri::Manager;
 use tauri::{AppHandle, State, WebviewWindow};
 
 use crate::error::{AppError, AppResult};
@@ -139,6 +141,10 @@ impl Native {
             .map_err(|_| unavailable())?
             .map_err(AppError::Playback)?;
         let wid = surface.id();
+        // mpv's own log, for diagnosing playback and input problems.
+        let log_dir = app.path().app_log_dir().map_err(failed)?;
+        std::fs::create_dir_all(&log_dir)?;
+        let log_file = log_dir.join("mpv.log").to_string_lossy().into_owned();
         let mpv = mpv::Mpv::new(
             library,
             &[
@@ -153,6 +159,7 @@ impl Native {
                 ("input-vo-keyboard", "yes"),
                 ("ytdl", "no"),
                 ("network-timeout", "20"),
+                ("log-file", &log_file),
             ],
         )
         .map_err(AppError::Playback)?;
