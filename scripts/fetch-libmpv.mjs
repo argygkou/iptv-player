@@ -71,6 +71,9 @@ try {
   execFileSync(sevenZip.path7za, ['e', file, `-o${work}`, DLL, '-y'], { stdio: 'ignore' });
   mkdirSync(dirname(target), { recursive: true });
   copyFileSync(join(work, DLL), target);
+  // Records where the DLL came from, for pinning RELEASE and SHA256 above.
+  const source = { release: tag_name, asset: asset.name, sha256: hash };
+  writeFileSync(join(dirname(target), 'libmpv.json'), `${JSON.stringify(source, null, 2)}\n`);
   console.log(`Saved ${target}`);
 } finally {
   rmSync(work, { recursive: true, force: true });
