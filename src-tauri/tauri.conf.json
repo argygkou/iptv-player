@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Infinite IPTV",
-  "version": "0.1.0",
+  "version": "../package.json",
   "identifier": "com.argygkou.infiniteiptv",
   "build": {
     "frontendDist": "../dist/infinite-iptv/browser",
@@ -34,7 +34,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "category": "Video",
     "shortDescription": "IPTV player for Xtream Codes providers",
     "icon": [
@@ -45,7 +45,8 @@
       "icons/icon.ico"
     ],
     "windows": {
-      "webviewInstallMode": { "type": "downloadBootstrapper" }
+      "webviewInstallMode": { "type": "downloadBootstrapper" },
+      "nsis": { "installMode": "currentUser" }
     }
   }
 }

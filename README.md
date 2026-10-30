@@ -115,7 +115,7 @@ npm run fetch-libmpv  # download libmpv-2.dll into src-tauri\lib (dev and bundle
                       # plain cargo commands need it too, and fail to copy it while the app is running)
 npm run dev        # the desktop window with hot reload (first run compiles Rust and takes a few minutes)
 npm test           # Angular unit tests (Vitest)
-npm run bundle     # release build: NSIS .exe and .msi under src-tauri\target\release\bundle
+npm run bundle     # release build: NSIS installer under src-tauri\target\release\bundle\nsis
 cargo test --manifest-path src-tauri\Cargo.toml
 ```
 
@@ -128,8 +128,22 @@ cargo test --manifest-path src-tauri\Cargo.toml
 playback uses a public sample video). Open http://localhost:4200 and sign in with any values. The mock is never
 included in production builds.
 
-CI runs lint and tests on Ubuntu and builds the Windows installers on every pull request; the installers are
-attached to the workflow run as an artifact.
+CI runs lint and tests on Ubuntu and Windows for every pull request. It does not build installers.
+
+## Releases
+
+Versions follow [semver](https://semver.org/). `package.json` is the single source of the version:
+`tauri.conf.json` reads it from there, and release-please keeps `src-tauri/Cargo.toml` and `Cargo.lock` in step.
+Never bump a version by hand.
+
+1. Pull requests are squash-merged, and their titles must be [Conventional Commits](https://www.conventionalcommits.org/)
+   (`feat: …`, `fix: …`, `chore: …`); a check enforces this. `feat` bumps the minor version, `fix` the patch.
+2. [release-please](https://github.com/googleapis/release-please-action) keeps a release PR open that bumps the
+   version and updates `CHANGELOG.md`.
+3. Merging the release PR tags `vX.Y.Z`, publishes a GitHub Release and builds the Windows NSIS installer into it.
+
+To try an installer from a branch without releasing, run the **Release** workflow manually from the Actions tab;
+the installer is attached to the run as an artifact.
 
 ## Microsoft Store
 
