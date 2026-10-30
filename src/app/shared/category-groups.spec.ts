@@ -17,11 +17,11 @@ const category = (id: string, name: string): Category => ({
 describe('categoryGroupKey', () => {
   it('reads the usual provider prefixes', () => {
     const key = (name: string) => categoryGroupKey(category('1', name));
-    expect(key('UK | Sports')).toBe('UK');
-    expect(key('|DE| Kinder')).toBe('DE');
-    expect(key('[fr] Cinéma')).toBe('FR');
-    expect(key('GR: News')).toBe('GR');
-    expect(key('US - Movies')).toBe('US');
+    expect(key('UK | Sports')).toBe('UNITED KINGDOM');
+    expect(key('|DE| Kinder')).toBe('GERMANY');
+    expect(key('[fr] Cinéma')).toBe('FRANCE');
+    expect(key('GR: News')).toBe('GREECE');
+    expect(key('US - Movies')).toBe('UNITED STATES');
     expect(key('Greece | News')).toBe('GREECE');
   });
 
@@ -53,11 +53,11 @@ describe('groupCategories', () => {
       category('3', '|DE| Kinder'),
       category('4', 'uk | News'),
       category('5', 'FR | Only one'),
-      category('6', 'DE: Sport'),
+      category('6', 'Germany: Sport'),
     ]);
     expect(groups.map((g) => [g.key, g.name, g.categories.map((c) => c.label)])).toEqual([
-      ['UK', 'United Kingdom', ['Sports', 'News']],
-      ['DE', 'Germany', ['Kinder', 'Sport']],
+      ['UNITED KINGDOM', 'United Kingdom', ['Sports', 'News']],
+      ['GERMANY', 'Germany', ['Kinder', 'Sport']],
       [null, 'Other', ['Documentaries', 'FR | Only one']],
     ]);
   });
@@ -78,7 +78,7 @@ describe('hidden categories', () => {
 
   it('hides single categories and whole groups', () => {
     expect([...hiddenCategoryIds(categories, NO_CATEGORY_PREFS)]).toEqual([]);
-    const prefs = { pinned: [], hidden: ['3'], hiddenGroups: ['UK'] };
+    const prefs = { pinned: [], hidden: ['3'], hiddenGroups: ['UNITED KINGDOM'] };
     expect([...hiddenCategoryIds(categories, prefs)].sort()).toEqual(['1', '2', '3']);
   });
 

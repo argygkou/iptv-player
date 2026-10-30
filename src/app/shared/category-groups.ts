@@ -157,7 +157,9 @@ function split(name: string): Split | null {
     const match = pattern.exec(name);
     const prefix = match?.[1].trim();
     if (match && prefix) {
-      return { key: groupKey(prefix), name: groupName(prefix), rest: match[2].trim() };
+      // Keyed by name, so "GR | News" and "Greece | Sports" share a group.
+      const name = groupName(prefix);
+      return { key: groupKey(name), name, rest: match[2].trim() };
     }
   }
   return null;
