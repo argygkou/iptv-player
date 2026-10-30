@@ -5,6 +5,7 @@ use serde_json::Value;
 use tauri::State;
 
 use crate::error::{AppError, AppResult};
+use crate::library::{Item, ItemKind, Library};
 use crate::profiles::Profile;
 use crate::proxy::parse_file;
 use crate::secrets;
@@ -31,6 +32,7 @@ async fn sign_in_saved(state: &AppState, profile: Profile) -> AppResult<SignedIn
     let creds = Credentials::new(&profile.server, &profile.username, &password)?;
     let account = authenticate(state, creds).await?;
     state.profiles.set_active(Some(&profile.id))?;
+    state.library.open(Some(&profile.id))?;
     Ok(SignedIn {
         account,
         profile: Some(profile),
@@ -57,6 +59,9 @@ pub async fn login(
         state.profiles.set_active(None)?;
         None
     };
+    state
+        .library
+        .open(profile.as_ref().map(|p| p.id.as_str()))?;
     Ok(SignedIn { account, profile })
 }
 
@@ -83,6 +88,7 @@ pub fn list_profiles(state: State<'_, Arc<AppState>>) -> Vec<Profile> {
 #[tauri::command]
 pub fn remove_profile(state: State<'_, Arc<AppState>>, id: String) -> AppResult<()> {
     secrets::delete(&state.data_dir, &id)?;
+    state.library.delete(&id)?;
     state.profiles.remove(&id)
 }
 
@@ -90,6 +96,7 @@ pub fn remove_profile(state: State<'_, Arc<AppState>>, id: String) -> AppResult<
 #[tauri::command]
 pub async fn logout(state: State<'_, Arc<AppState>>) -> AppResult<()> {
     *state.session.write().await = None;
+    state.library.close();
     state.profiles.set_active(None)
 }
 
@@ -121,4 +128,38 @@ pub async fn stream_url(
         file,
         state.proxy_token
     ))
+}
+
+#[tauri::command]
+pub fn library_get(state: State<'_, Arc<AppState>>) -> AppResult<Library> {
+    state.library.get()
+}
+
+#[tauri::command]
+pub fn library_set_favourite(
+    state: State<'_, Arc<AppState>>,
+    item: Item,
+    favourite: bool,
+) -> AppResult<Library> {
+    state.library.set_favourite(item, favourite)
+}
+
+/// Adds the item to the top of the history, with how far it was watched.
+#[tauri::command]
+pub fn library_record(
+    state: State<'_, Arc<AppState>>,
+    item: Item,
+    position: Option<f64>,
+    duration: Option<f64>,
+) -> AppResult<Library> {
+    state.library.record(item, position, duration)
+}
+
+#[tauri::command]
+pub fn library_forget(
+    state: State<'_, Arc<AppState>>,
+    kind: ItemKind,
+    id: String,
+) -> AppResult<Library> {
+    state.library.forget(kind, &id)
 }

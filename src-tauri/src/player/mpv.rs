@@ -45,6 +45,7 @@ const EVENT_PROPERTY_CHANGE: c_int = 22;
 const END_FILE_REASON_EOF: c_int = 0;
 const END_FILE_REASON_ERROR: c_int = 4;
 const FORMAT_FLAG: c_int = 3;
+const FORMAT_DOUBLE: c_int = 5;
 
 /// Events the player reacts to; everything else is skipped.
 pub enum Event {
@@ -73,6 +74,7 @@ struct Api {
     initialize: unsafe extern "C" fn(*mut Handle) -> c_int,
     set_option_string: unsafe extern "C" fn(*mut Handle, *const c_char, *const c_char) -> c_int,
     set_property_string: unsafe extern "C" fn(*mut Handle, *const c_char, *const c_char) -> c_int,
+    get_property: unsafe extern "C" fn(*mut Handle, *const c_char, c_int, *mut c_void) -> c_int,
     command: unsafe extern "C" fn(*mut Handle, *const *const c_char) -> c_int,
     observe_property: unsafe extern "C" fn(*mut Handle, u64, *const c_char, c_int) -> c_int,
     wait_event: unsafe extern "C" fn(*mut Handle, c_double) -> *mut RawEvent,
@@ -99,6 +101,7 @@ impl Api {
                 initialize: symbol!("mpv_initialize"),
                 set_option_string: symbol!("mpv_set_option_string"),
                 set_property_string: symbol!("mpv_set_property_string"),
+                get_property: symbol!("mpv_get_property"),
                 command: symbol!("mpv_command"),
                 observe_property: symbol!("mpv_observe_property"),
                 wait_event: symbol!("mpv_wait_event"),
@@ -180,6 +183,23 @@ impl Mpv {
         self.check(unsafe {
             (self.api.set_property_string)(self.handle, name.as_ptr(), value.as_ptr())
         })
+    }
+
+    /// A numeric property such as `time-pos`; an error while it is unavailable,
+    /// for example with nothing loaded.
+    pub fn get_double(&self, name: &str) -> Result<f64, String> {
+        let name = c_string(name)?;
+        let mut value: c_double = 0.0;
+        // SAFETY: valid handle, NUL-terminated name, and a c_double for FORMAT_DOUBLE.
+        self.check(unsafe {
+            (self.api.get_property)(
+                self.handle,
+                name.as_ptr(),
+                FORMAT_DOUBLE,
+                (&raw mut value).cast(),
+            )
+        })?;
+        Ok(value)
     }
 
     /// Reports changes of a boolean property as [`Event::Flag`].
@@ -269,6 +289,14 @@ mod tests {
             &mpv,
             |e| matches!(e, Event::Flag(name, true) if name == "pause"),
         );
+    }
+
+    #[test]
+    fn reads_numeric_properties() {
+        let Some(mpv) = bundled() else { return };
+        assert_eq!(mpv.get_double("volume"), Ok(100.0));
+        // Nothing is loaded, so there is no playback position.
+        assert!(mpv.get_double("time-pos").is_err());
     }
 
     #[test]

@@ -8,10 +8,14 @@ import {
   inject,
   input,
   signal,
+  untracked,
 } from '@angular/core';
+
+import { Progress } from '../../core/library/library.models';
 
 import { measure } from './bounds';
 import { NativePlayback } from './native-playback';
+import { PROGRESS_INTERVAL } from './progress';
 
 /**
  * Reserves the player's box in the page and keeps the native mpv window over
@@ -61,6 +65,10 @@ import { NativePlayback } from './native-playback';
 export class NativeVideoPlayer {
   readonly src = input.required<string>();
   readonly live = input(false);
+  /** Seconds to start from; read when a stream opens. */
+  readonly start = input(0);
+  /** Receives the position of a movie or episode while it plays and when it closes. */
+  readonly onProgress = input<(progress: Progress) => void>();
 
   protected readonly playback = inject(NativePlayback);
   private readonly failed = signal<string | null>(null);
@@ -74,14 +82,34 @@ export class NativeVideoPlayer {
   constructor() {
     const element = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
 
-    effect(() => {
+    // Reads the position one last time; set while a movie or episode plays.
+    let finish: (() => void) | undefined;
+
+    effect((onCleanup) => {
       const [src, live] = [this.src(), this.live()];
       this.attempt();
+      const [start, report] = untracked(() => [this.start(), this.onProgress()] as const);
       this.failed.set(null);
-      this.playback.open(src, live, measure(element)).catch((error: unknown) => {
+      this.playback.open(src, live, measure(element), start).catch((error: unknown) => {
         this.failed.set(String(error));
         void this.playback.stop();
       });
+      if (live || !report) {
+        return;
+      }
+      // Queued like every other call, so it reads this file before the next opens.
+      const sample = () =>
+        void this.playback
+          .progress()
+          .then((progress) => progress && report(progress))
+          .catch(() => undefined);
+      const timer = setInterval(sample, PROGRESS_INTERVAL);
+      finish = () => {
+        clearInterval(timer);
+        finish = undefined;
+        sample();
+      };
+      onCleanup(() => finish?.());
     });
 
     let last = '';
@@ -98,6 +126,8 @@ export class NativeVideoPlayer {
 
     inject(DestroyRef).onDestroy(() => {
       cancelAnimationFrame(frame);
+      // Before `stop()`, which unloads the file.
+      finish?.();
       void this.playback.stop();
     });
   }

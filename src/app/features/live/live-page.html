@@ -1,4 +1,5 @@
 <app-category-list
+  [extras]="extras"
   [categories]="categories.hasValue() ? categories.value() : []"
   [selected]="category() ?? null"
   (selectedChange)="selectCategory($event)"
@@ -33,15 +34,22 @@
             <span class="logo-placeholder"></span>
           }
           <span class="name">{{ stream.name }}</span>
+          @if (isFavourite(stream)) {
+            <span class="star" aria-label="Favourite">★</span>
+          }
         </button>
       </li>
+    } @empty {
+      @if (streams.hasValue() && category() === favouritesId && !search()) {
+        <li class="status">Star a channel to add it here.</li>
+      }
     }
   </ul>
 </section>
 
 <section class="content now-playing">
   @if (playback.hasValue()) {
-    <app-video-player [src]="playback.value()" [live]="true" />
+    <app-video-player [src]="playback.value()" [live]="true" [item]="item()" />
   } @else {
     <div class="idle">
       @if (playback.error()) {
@@ -52,8 +60,11 @@
     </div>
   }
 
-  @if (selected(); as stream) {
-    <h2>{{ stream.name }}</h2>
+  @if (item(); as item) {
+    <div class="title">
+      <h2>{{ item.name }}</h2>
+      <app-favourite-button [item]="item" [label]="true" />
+    </div>
   }
 
   @if (epg.hasValue()) {

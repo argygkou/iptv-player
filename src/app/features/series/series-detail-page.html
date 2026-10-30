@@ -4,7 +4,7 @@
   @let show = details.value().info;
 
   @if (playing(); as current) {
-    <app-video-player [src]="current.url" />
+    <app-video-player [src]="current.url" [item]="current.item" [start]="current.start" />
     <h2>
       S{{ current.episode.season }}E{{ current.episode.episode_num }} · {{ current.episode.title }}
     </h2>
@@ -19,6 +19,11 @@
         <p>{{ show.plot }}</p>
         @if (show.cast) {
           <p class="facts">Cast: {{ show.cast }}</p>
+        }
+        @if (item(); as item) {
+          <div class="actions">
+            <app-favourite-button [item]="item" [label]="true" />
+          </div>
         }
       </div>
     </div>
@@ -50,7 +55,17 @@
           <span class="title">
             <strong>{{ episode.episode_num }}. {{ episode.title }}</strong>
             @if (episode.info?.duration; as duration) {
-              <small>{{ duration }}</small>
+              <small>
+                {{ duration }}
+                @if (finished(episode)) {
+                  · ✓ Watched
+                }
+              </small>
+            }
+            @if (watched(episode); as fraction) {
+              @if (!finished(episode)) {
+                <progress [value]="fraction" max="1"></progress>
+              }
             }
           </span>
         </button>

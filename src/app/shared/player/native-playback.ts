@@ -2,6 +2,7 @@ import { Injectable, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
+import { Progress } from '../../core/library/library.models';
 import { Bounds } from './bounds';
 
 interface PlaybackError {
@@ -33,14 +34,15 @@ export class NativePlayback {
   /** Latest bounds not yet sent; updates in between are dropped, not queued. */
   private pendingBounds: Bounds | null = null;
 
-  open(url: string, live: boolean, bounds: Bounds): Promise<void> {
+  /** `start` is in seconds, to resume a movie or episode. */
+  open(url: string, live: boolean, bounds: Bounds, start = 0): Promise<void> {
     this.listen();
     this.error.set(null);
     // Set before the call: an error can arrive before `player_open` returns.
     const generation = ++this.generation;
     return this.enqueue(async () => {
       this.playing = true;
-      await invoke('player_open', { media: { url, generation, live }, bounds });
+      await invoke('player_open', { media: { url, generation, live, start }, bounds });
     });
   }
 
@@ -59,6 +61,13 @@ export class NativePlayback {
     });
   }
 
+  /** Where the current file is; `null` when nothing is playing. */
+  progress(): Promise<Progress | null> {
+    return this.enqueue(async () =>
+      this.playing ? invoke<Progress | null>('player_progress') : null,
+    );
+  }
+
   stop(): Promise<void> {
     return this.enqueue(async () => {
       this.playing = false;
@@ -66,7 +75,7 @@ export class NativePlayback {
     });
   }
 
-  private enqueue(task: () => Promise<void>): Promise<void> {
+  private enqueue<T>(task: () => Promise<T>): Promise<T> {
     const run = this.queue.then(task);
     this.queue = run.catch(() => undefined);
     return run;

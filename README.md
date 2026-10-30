@@ -15,6 +15,9 @@ Windows is the first target; Linux and iOS are planned (see [Roadmap](#roadmap))
 - **TV Guide**: a timeline grid per category (six hours around now); click a channel to watch it.
 - **Movies**: category browser, poster grid with search and incremental rendering, details and playback.
 - **Series**: category browser, seasons and episodes, playback.
+- **My List**: favourite channels, movies and series (☆ on a channel, movie or series), recently watched
+  channels, and "Continue watching" for movies and episodes. Movies and episodes resume where they were left;
+  each saved profile has its own lists.
 
 ## Architecture
 
@@ -22,14 +25,16 @@ Windows is the first target; Linux and iOS are planned (see [Roadmap](#roadmap))
 src/                         Angular app (standalone components, signals, resource())
   app/core/xtream/           Typed models, XtreamApi facade over Tauri commands, EPG helpers
   app/core/session/          SessionStore (signals) and the auth guard
+  app/core/library/          LibraryStore: favourites, history and resume positions
   app/shared/player/         Video player: native (libmpv) with a webview fallback
   app/shared/                Category list, poster grid, utilities
-  app/features/              login, shell, live, guide, movies, series (all lazy routes)
+  app/features/              login, shell, library, live, guide, movies, series (all lazy routes)
 src-tauri/                   Rust backend
   src/xtream.rs              player_api.php client (allow-listed actions only)
   src/proxy.rs               Local stream relay on 127.0.0.1
   src/player/                libmpv binding and the native video window (Windows)
-  src/commands.rs            login / logout / xtream / stream_url commands
+  src/library.rs             Per-profile favourites and watch history
+  src/commands.rs            login / logout / xtream / stream_url / library commands
 ```
 
 **Why the provider is called from Rust.** Xtream panels are usually plain `http://` and send no CORS headers,
@@ -39,6 +44,11 @@ password never reaches the webview.
 **Saved profiles.** `profiles.json` in the app data directory lists saved accounts (no passwords) and which one
 to restore on launch. Passwords go to Windows Credential Manager. Signing out keeps the profile for one-click
 sign-in but stops auto sign-in; the ✕ on the sign-in screen deletes it and its password.
+
+**Favourites and history.** Each saved profile's lists live in `library/<profile id>.json` in the app data
+directory, opened on sign-in; a one-off sign-in keeps them in memory only. The player saves the position of a
+movie or episode every 10 seconds and when it closes (mpv's `time-pos`, or the `<video>` element's
+`currentTime`), and reopens it with mpv's per-file `start` option. Near the end counts as watched.
 
 **Why there is a local relay.** The same restrictions apply to media: mpegts.js needs to `fetch()` the
 live stream, and an https app origin would block `http://` media entirely. The backend starts a small axum
@@ -118,8 +128,6 @@ installer with a code-signing certificate. See the
 
 ## Roadmap
 
-1. Per-profile settings (favourites, history).
-2. Favourites, recently watched, resume position for movies and episodes.
-3. Full XMLTV EPG (`xmltv.php`) with a local cache, and catch-up for channels with `tv_archive`.
-4. Microsoft Store submission and auto-updates for the direct download.
-5. Linux packages (`.deb`, AppImage) with native playback, then iOS through Tauri's mobile target.
+1. Full XMLTV EPG (`xmltv.php`) with a local cache, and catch-up for channels with `tv_archive`.
+2. Microsoft Store submission and auto-updates for the direct download.
+3. Linux packages (`.deb`, AppImage) with native playback, then iOS through Tauri's mobile target.

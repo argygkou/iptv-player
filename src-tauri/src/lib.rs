@@ -1,5 +1,6 @@
 mod commands;
 mod error;
+mod library;
 mod player;
 mod profiles;
 mod proxy;
@@ -48,6 +49,11 @@ pub fn run() {
             commands::logout,
             commands::xtream,
             commands::stream_url,
+            commands::library_get,
+            commands::library_set_favourite,
+            commands::library_record,
+            commands::library_forget,
+            player::player_progress,
             player::player_available,
             player::player_open,
             player::player_set_bounds,

@@ -44,9 +44,18 @@
     margin: 0;
   }
 
-  .primary {
-    align-self: flex-start;
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
     margin-top: 0.5rem;
+  }
+
+  .watched {
+    width: 100%;
+    max-width: 320px;
+    height: 4px;
   }
 }
 

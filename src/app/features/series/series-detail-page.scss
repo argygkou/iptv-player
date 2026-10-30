@@ -38,8 +38,15 @@
 
   .title {
     display: flex;
+    flex: 1;
     flex-direction: column;
     gap: 0.25rem;
+  }
+
+  progress {
+    width: 100%;
+    max-width: 240px;
+    height: 4px;
   }
 
   small {
