@@ -14,6 +14,8 @@ pub enum AppError {
     Http(reqwest::Error),
     #[error("Unexpected response from provider: {0}")]
     Decode(#[from] serde_json::Error),
+    #[error("Unexpected response from provider: expected a list")]
+    NotAList,
     #[error("Unknown profile")]
     UnknownProfile,
     #[error("The saved password for this profile is missing")]

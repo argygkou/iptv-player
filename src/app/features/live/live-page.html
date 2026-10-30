@@ -1,10 +1,12 @@
 <app-category-list
   kind="live"
   [extras]="extras"
-  [categories]="categories.hasValue() ? categories.value() : []"
+  [categories]="categories.value()"
   [selected]="category() ?? null"
   (selectedChange)="selectCategory($event)"
-/>
+>
+  <app-catalogue-refresh [lists]="lists" />
+</app-category-list>
 
 <section class="content channels">
   <div class="toolbar">
@@ -41,7 +43,7 @@
         </button>
       </li>
     } @empty {
-      @if (streams.hasValue() && category() === favouritesId && !search()) {
+      @if (!streams.isLoading() && category() === favouritesId && !search()) {
         <li class="status">Star a channel to add it here.</li>
       }
     }

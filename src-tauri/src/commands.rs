@@ -5,6 +5,7 @@ use serde::Serialize;
 use serde_json::Value;
 use tauri::State;
 
+use crate::catalogue::{List, Snapshot};
 use crate::epg::Programme;
 use crate::error::{AppError, AppResult};
 use crate::library::{Catalogue, CategoryPrefs, Item, ItemKind, Library};
@@ -91,6 +92,7 @@ pub fn list_profiles(state: State<'_, Arc<AppState>>) -> Vec<Profile> {
 pub fn remove_profile(state: State<'_, Arc<AppState>>, id: String) -> AppResult<()> {
     if let Some(profile) = state.profiles.get(&id) {
         state.epg.delete(&profile.server, &profile.username)?;
+        state.catalogue.delete(&profile.server, &profile.username)?;
     }
     secrets::delete(&state.data_dir, &id)?;
     state.library.delete(&id)?;
@@ -114,6 +116,21 @@ pub async fn xtream(
 ) -> AppResult<Value> {
     let creds = state.credentials().await?;
     xtream::call(&state.http, &creds, action, &query.unwrap_or_default()).await
+}
+
+/// A category or stream list: the cached copy whatever its age (flagged
+/// `stale` when due a refresh), or a download when nothing is cached.
+#[tauri::command]
+pub async fn catalogue_get(state: State<'_, Arc<AppState>>, list: List) -> AppResult<Snapshot> {
+    let creds = state.credentials().await?;
+    state.catalogue.get(&state.http, &creds, list).await
+}
+
+/// Downloads a list again; `items` is left out when nothing changed.
+#[tauri::command]
+pub async fn catalogue_refresh(state: State<'_, Arc<AppState>>, list: List) -> AppResult<Snapshot> {
+    let creds = state.credentials().await?;
+    state.catalogue.refresh(&state.http, &creds, list).await
 }
 
 /// A URL on the local relay the `<video>` element or mpegts.js can play.

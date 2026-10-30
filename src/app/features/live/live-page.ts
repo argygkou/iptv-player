@@ -27,9 +27,11 @@ import {
   panelTime,
   progress,
 } from '../../core/xtream/epg';
+import { CatalogueStore, inCategory } from '../../core/xtream/catalogue-store';
 import { TvGuide } from '../../core/xtream/tv-guide';
 import { XtreamApi } from '../../core/xtream/xtream-api';
 import { LiveStream, Programme } from '../../core/xtream/xtream.models';
+import { CatalogueRefresh } from '../../shared/catalogue-refresh';
 import { hiddenCategoryIds, withoutHidden } from '../../shared/category-groups';
 import { CategoryList } from '../../shared/category-list';
 import { FavouriteButton } from '../../shared/favourite-button';
@@ -50,12 +52,13 @@ const CHANNEL_PAGE = 200;
 @Component({
   selector: 'app-live-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CategoryList, FavouriteButton, InView, VideoPlayer, DatePipe],
+  imports: [CatalogueRefresh, CategoryList, FavouriteButton, InView, VideoPlayer, DatePipe],
   templateUrl: './live-page.html',
   styleUrls: ['../../shared/catalogue-layout.scss', './live-page.scss'],
 })
 export class LivePage {
   private readonly api = inject(XtreamApi);
+  private readonly catalogue = inject(CatalogueStore);
   private readonly router = inject(Router);
   private readonly session = inject(SessionStore);
   private readonly tvGuide = inject(TvGuide);
@@ -75,14 +78,12 @@ export class LivePage {
   protected readonly extras = [FAVOURITES, RECENT];
   protected readonly favouritesId = FAVOURITES.id;
 
-  protected readonly categories = resource({ loader: () => this.api.liveCategories() });
-  /** The favourites and recent lists pick from all channels. */
-  protected readonly streams = resource({
-    params: () => ({ categoryId: isSavedList(this.category()) ? undefined : this.category() }),
-    loader: ({ params }) => this.api.liveStreams(params.categoryId),
-  });
+  protected readonly categories = this.catalogue.liveCategories.load();
+  /** Every channel; the categories and the saved lists pick from it. */
+  protected readonly streams = this.catalogue.liveStreams.load();
+  protected readonly lists = [this.categories, this.streams];
   private readonly listed = computed(() => {
-    const streams = this.streams.hasValue() ? this.streams.value() : [];
+    const streams = this.streams.value();
     const category = this.category();
     if (category === FAVOURITES.id) {
       return pick(streams, this.library.favouritesOf('live'));
@@ -90,12 +91,12 @@ export class LivePage {
     if (category === RECENT.id) {
       return pick(streams, this.library.recentChannels());
     }
-    if (category === undefined && this.categories.hasValue()) {
+    if (category === undefined) {
       // "All" leaves out the categories the user hid.
       const prefs = this.library.categoryPrefs('live');
       return withoutHidden(streams, hiddenCategoryIds(this.categories.value(), prefs));
     }
-    return streams;
+    return inCategory(streams, isSavedList(category) ? undefined : category);
   });
   protected readonly visibleStreams = computed(() => filterByName(this.listed(), this.search()));
   /**
@@ -110,19 +111,11 @@ export class LivePage {
     this.visibleStreams().slice(0, this.channelLimit()),
   );
   protected readonly channelPage = CHANNEL_PAGE;
-  /** Every channel, so the one playing stays known while another category is browsed. */
-  private readonly allStreams = resource({
-    params: () => this.channel(),
-    loader: () => this.api.liveStreams(),
-  });
+  /** From all channels, so the one playing stays known while another category is browsed. */
   protected readonly selected = computed(
     () => {
       const id = this.channel();
-      const find = (list: LiveStream[]) => list.find((s) => String(s.stream_id) === id);
-      return (
-        (this.allStreams.hasValue() ? find(this.allStreams.value()) : undefined) ??
-        (this.streams.hasValue() ? find(this.streams.value()) : undefined)
-      );
+      return this.streams.value().find((s) => String(s.stream_id) === id);
     },
     // The same channel from another list is not a change; it would reload its guide.
     { equal: (a, b) => a?.stream_id === b?.stream_id },
@@ -320,7 +313,7 @@ export class LivePage {
 }
 
 /** The channels in `items`, in the order of `items`. */
-function pick(streams: LiveStream[], items: LibraryItem[]): LiveStream[] {
+function pick(streams: readonly LiveStream[], items: LibraryItem[]): LiveStream[] {
   const byId = new Map(streams.map((s) => [libraryKey('live', String(s.stream_id)), s]));
   return items.flatMap((item) => byId.get(libraryKey('live', item.id)) ?? []);
 }

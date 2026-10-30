@@ -227,8 +227,8 @@ export function hiddenCategoryIds(
 
 /** The items of "All": everything outside a hidden category. */
 export function withoutHidden<T extends { category_id: string | null | undefined }>(
-  items: T[],
+  items: readonly T[],
   hidden: ReadonlySet<string>,
-): T[] {
+): readonly T[] {
   return hidden.size ? items.filter((item) => !hidden.has(String(item.category_id))) : items;
 }

@@ -1,17 +1,10 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  input,
-  resource,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { LibraryStore } from '../../core/library/library-store';
 import { LibraryItem, watchedFraction } from '../../core/library/library.models';
-import { XtreamApi } from '../../core/xtream/xtream-api';
+import { CatalogueStore, inCategory } from '../../core/xtream/catalogue-store';
+import { CatalogueRefresh } from '../../shared/catalogue-refresh';
 import { hiddenCategoryIds, withoutHidden } from '../../shared/category-groups';
 import { CategoryList } from '../../shared/category-list';
 import { PosterGrid, PosterItem } from '../../shared/poster-grid';
@@ -21,15 +14,17 @@ import { filterByName } from '../../shared/search';
 @Component({
   selector: 'app-movies-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CategoryList, PosterGrid],
+  imports: [CatalogueRefresh, CategoryList, PosterGrid],
   template: `
     <app-category-list
       kind="movie"
       [extras]="extras"
-      [categories]="categories.hasValue() ? categories.value() : []"
+      [categories]="categories.value()"
       [selected]="category() ?? null"
       (selectedChange)="selectCategory($event)"
-    />
+    >
+      <app-catalogue-refresh [lists]="lists" />
+    </app-category-list>
     <section class="content">
       <div class="toolbar">
         <input
@@ -56,7 +51,7 @@ import { filterByName } from '../../shared/search';
   styleUrl: '../../shared/catalogue-layout.scss',
 })
 export class MoviesPage {
-  private readonly api = inject(XtreamApi);
+  private readonly catalogue = inject(CatalogueStore);
   private readonly router = inject(Router);
   private readonly library = inject(LibraryStore);
 
@@ -64,20 +59,21 @@ export class MoviesPage {
   protected readonly search = signal('');
   protected readonly extras = [FAVOURITES, CONTINUE];
 
-  protected readonly categories = resource({ loader: () => this.api.movieCategories() });
-  /** Not needed for the saved lists, which the library already holds. */
-  protected readonly movies = resource({
-    params: () => (isSavedList(this.category()) ? undefined : { categoryId: this.category() }),
-    loader: ({ params }) => this.api.movies(params.categoryId),
-  });
+  protected readonly categories = this.catalogue.movieCategories.load();
+  protected readonly movies = this.catalogue.movies.load();
+  protected readonly lists = [this.categories, this.movies];
   /** "All" leaves out the categories the user hid. */
   private readonly listed = computed(() => {
-    const movies = this.movies.hasValue() ? this.movies.value() : [];
-    if (this.category() !== undefined || !this.categories.hasValue()) {
-      return movies;
+    const category = this.category();
+    if (isSavedList(category)) {
+      return [];
+    }
+    const items = this.movies.value();
+    if (category !== undefined) {
+      return inCategory(items, category);
     }
     const prefs = this.library.categoryPrefs('movie');
-    return withoutHidden(movies, hiddenCategoryIds(this.categories.value(), prefs));
+    return withoutHidden(items, hiddenCategoryIds(this.categories.value(), prefs));
   });
   /** The favourites or continue-watching list, when one is selected. */
   protected readonly saved = computed(() => {

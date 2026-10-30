@@ -12,8 +12,8 @@ import { Router } from '@angular/router';
 
 import { LibraryStore } from '../../core/library/library-store';
 import { canCatchUp, isAiring } from '../../core/xtream/epg';
+import { CatalogueStore, inCategory } from '../../core/xtream/catalogue-store';
 import { TvGuide } from '../../core/xtream/tv-guide';
-import { XtreamApi } from '../../core/xtream/xtream-api';
 import { Category, LiveStream, Programme } from '../../core/xtream/xtream.models';
 import { groupCategories, isCategoryHidden } from '../../shared/category-groups';
 import { Clock } from '../../shared/clock';
@@ -62,7 +62,6 @@ export function programmeAction(
   styleUrl: './guide-page.scss',
 })
 export class GuidePage {
-  private readonly api = inject(XtreamApi);
   private readonly router = inject(Router);
   private readonly clock = inject(Clock);
   private readonly library = inject(LibraryStore);
@@ -74,11 +73,13 @@ export class GuidePage {
   protected readonly shift = signal(0);
   protected readonly refreshing = signal(false);
 
-  protected readonly categories = resource({ loader: () => this.api.liveCategories() });
+  private readonly catalogue = inject(CatalogueStore);
+  protected readonly categories = this.catalogue.liveCategories.load();
+  private readonly allChannels = this.catalogue.liveStreams.load();
   /** The live categories as the sidebar arranges them: pinned first, grouped, none hidden. */
   protected readonly categoryMenu = computed(() => {
     const prefs = this.library.categoryPrefs('live');
-    const all = this.categories.hasValue() ? this.categories.value() : [];
+    const all = this.categories.value();
     // The category opened from a link stays listed even if hidden, so the menu matches.
     const shown = (c: Category) => !isCategoryHidden(c, prefs) || c.category_id === this.category();
     const byId = new Map(all.filter(shown).map((c) => [c.category_id, c]));
@@ -96,10 +97,13 @@ export class GuidePage {
     const first = pinned.at(0) ?? groups.at(0)?.categories.at(0)?.category;
     return this.category() ?? first?.category_id;
   });
-  protected readonly channels = resource({
-    params: () => this.activeCategory(),
-    loader: ({ params }) => this.api.liveStreams(params),
-  });
+  protected readonly channels = computed(() =>
+    this.activeCategory() === undefined
+      ? []
+      : inCategory(this.allChannels.value(), this.activeCategory()),
+  );
+  protected readonly loadingChannels = this.allChannels.isLoading;
+  protected readonly channelsError = this.allChannels.error;
 
   protected readonly timelineWidth = WINDOW_MINUTES * PX_PER_MINUTE;
   /** Starts at the previous half hour, minus 30 minutes of context, then shifted. */
@@ -118,9 +122,9 @@ export class GuidePage {
 
   protected readonly guide = resource({
     params: () =>
-      this.channels.hasValue()
+      this.channels().length
         ? {
-            channels: this.channels.value(),
+            channels: this.channels(),
             from: this.windowStart(),
             to: this.windowEnd(),
             version: this.tvGuide.version(),

@@ -31,7 +31,7 @@ export class TvGuide {
 
   /** Programmes overlapping `from`..`to`, by `stream_id`. */
   async programmes(
-    streams: LiveStream[],
+    streams: readonly LiveStream[],
     from: Date,
     to: Date,
     abortSignal?: AbortSignal,

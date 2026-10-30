@@ -1,5 +1,5 @@
 :host {
-  grid-template-columns: 240px minmax(260px, 340px) 1fr;
+  grid-template-columns: clamp(220px, 20vw, 300px) clamp(260px, 24vw, 420px) 1fr;
 }
 
 .channels ul {

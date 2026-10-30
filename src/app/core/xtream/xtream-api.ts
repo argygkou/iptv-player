@@ -3,35 +3,23 @@ import { invoke } from '@tauri-apps/api/core';
 
 import { fromGuide, toProgramme } from './epg';
 import {
-  Category,
+  CatalogueListName,
+  CatalogueSnapshot,
   Credentials,
   GuideWindow,
-  LiveStream,
   Profile,
   Programme,
   SeriesInfo,
-  SeriesItem,
   ShortEpgResponse,
   SignedIn,
   StreamKind,
   VodInfo,
-  VodStream,
   XtreamId,
 } from './xtream.models';
 
-type Action =
-  | 'get_live_categories'
-  | 'get_vod_categories'
-  | 'get_series_categories'
-  | 'get_live_streams'
-  | 'get_vod_streams'
-  | 'get_series'
-  | 'get_vod_info'
-  | 'get_series_info'
-  | 'get_short_epg';
+type Action = 'get_vod_info' | 'get_series_info' | 'get_short_epg';
 
 interface Query {
-  categoryId?: string;
   streamId?: string;
   vodId?: string;
   seriesId?: string;
@@ -39,8 +27,9 @@ interface Query {
 }
 
 /**
- * Typed facade over the Rust `xtream` commands. Catalogue calls are cached for
- * the session because providers serve large, rarely changing lists; EPG is not.
+ * Typed facade over the Rust `xtream` commands. Movie and series details are
+ * cached for the session; the category and stream lists are cached on disk by
+ * the backend (see `CatalogueStore`); EPG is not cached here.
  */
 @Injectable({ providedIn: 'root' })
 export class XtreamApi {
@@ -75,28 +64,14 @@ export class XtreamApi {
     await invoke('logout');
   }
 
-  liveCategories(): Promise<Category[]> {
-    return this.cached('get_live_categories');
+  /** A list from the backend's cache, or downloaded when nothing is cached. */
+  catalogue<T>(list: CatalogueListName): Promise<CatalogueSnapshot<T>> {
+    return invoke<CatalogueSnapshot<T>>('catalogue_get', { list });
   }
 
-  movieCategories(): Promise<Category[]> {
-    return this.cached('get_vod_categories');
-  }
-
-  seriesCategories(): Promise<Category[]> {
-    return this.cached('get_series_categories');
-  }
-
-  liveStreams(categoryId?: string): Promise<LiveStream[]> {
-    return this.cached('get_live_streams', { categoryId });
-  }
-
-  movies(categoryId?: string): Promise<VodStream[]> {
-    return this.cached('get_vod_streams', { categoryId });
-  }
-
-  series(categoryId?: string): Promise<SeriesItem[]> {
-    return this.cached('get_series', { categoryId });
+  /** Downloads a list again; `items` is `null` when it did not change. */
+  refreshCatalogue<T>(list: CatalogueListName): Promise<CatalogueSnapshot<T>> {
+    return invoke<CatalogueSnapshot<T>>('catalogue_refresh', { list });
   }
 
   movieInfo(vodId: XtreamId): Promise<VodInfo> {
