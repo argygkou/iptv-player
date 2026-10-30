@@ -279,6 +279,9 @@ const handlers: Record<string, (args: Args) => unknown> = {
     }),
   // Native playback needs libmpv in the desktop app; the mock uses the webview player.
   player_available: () => false,
+  'plugin:app|version': () => '0.0.0-mock',
+  // The real updater would find no newer release for a dev build either.
+  'plugin:updater|check': () => null,
   catalogue_get: ({ list }) => catalogue(list),
   // Slow enough to see the refresh indicator.
   catalogue_refresh: async ({ list }) => {

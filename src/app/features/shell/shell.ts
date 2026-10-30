@@ -1,18 +1,20 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, PercentPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { SessionStore } from '../../core/session/session-store';
+import { UpdateStore } from '../../core/updates/update-store';
 
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, DatePipe],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, DatePipe, PercentPipe],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
 })
 export class Shell {
   protected readonly session = inject(SessionStore);
+  protected readonly updates = inject(UpdateStore);
   private readonly router = inject(Router);
 
   protected readonly sections = [
