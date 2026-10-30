@@ -263,8 +263,24 @@ impl Native {
                 ("config", "yes"),
                 ("osc", "no"),
                 ("osd-bar", "no"),
-                // The app window has its own title bar and controls.
-                ("script-opts", "modernz-window_top_bar=no"),
+                // A YouTube-style bar: one compact row with a red seekbar, shown
+                // on any mouse movement. The app window has its own title bar.
+                (
+                    "script-opts",
+                    concat!(
+                        "modernz-layout=compact,modernz-window_top_bar=no,",
+                        "modernz-window_controls=no,modernz-deadzonesize=0,",
+                        "modernz-hidetimeout=2500,modernz-osc_on_start=no,",
+                        "modernz-seekbarfg_color=#FF0000,modernz-seek_handle_color=#FF0000,",
+                        "modernz-seek_handle_border_color=#FF0000,",
+                        "modernz-hover_effect_color=#FF0000,",
+                        "modernz-volumebar_match_seek_color=yes,",
+                        "modernz-playlist_button=no,modernz-track_nextprev_buttons=no,",
+                        "modernz-ontop_button=no,modernz-screenshot_button=no,",
+                        "modernz-download_button=no,modernz-info_button=no,",
+                        "modernz-loop_button=no",
+                    ),
+                ),
             ]),
             None => options.extend([
                 ("osc", "yes"),

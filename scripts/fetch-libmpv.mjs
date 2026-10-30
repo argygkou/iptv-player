@@ -49,14 +49,22 @@ const PACKAGES = [
   {
     name: 'modernz',
     repo: 'Samillion/ModernZ',
-    release: null,
+    release: 'v0.3.3',
     installed: join(MPV, 'scripts', 'modernz.lua'),
     // src-tauri/mpv is laid out like an mpv config directory and holds only
     // this, so it starts from scratch (dropping any earlier interface).
     prepare: () => rmSync(MPV, { recursive: true, force: true }),
     assets: [
-      { pattern: /^modernz\.lua$/, sha256: null, install: into(join(MPV, 'scripts')) },
-      { pattern: /^fluent-system-icons\.ttf$/, sha256: null, install: into(join(MPV, 'fonts')) },
+      {
+        pattern: /^modernz\.lua$/,
+        sha256: 'c36aef0152d3fdb0c769cefe7074648b457ed50ea4ddcc402b778bec23ca32c8',
+        install: into(join(MPV, 'scripts')),
+      },
+      {
+        pattern: /^modernz-icons\.ttf$/,
+        sha256: '5033b84d569502538968c6f23b0859bda790eed85c10e419b0759537ec60a016',
+        install: into(join(MPV, 'fonts')),
+      },
     ],
   },
 ];
