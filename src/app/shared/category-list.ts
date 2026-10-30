@@ -62,13 +62,16 @@ interface ShownGroup extends CategoryGroup {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [NgTemplateOutlet],
   template: `
-    <input
-      class="filter"
-      type="search"
-      placeholder="Filter categories"
-      [value]="filter()"
-      (input)="filter.set($any($event.target).value)"
-    />
+    <div class="header">
+      <input
+        class="filter"
+        type="search"
+        placeholder="Filter categories"
+        [value]="filter()"
+        (input)="filter.set($any($event.target).value)"
+      />
+      <ng-content />
+    </div>
     <ul>
       <li class="row" [class.active]="selected() === null">
         <button type="button" class="pick" (click)="selectedChange.emit(null)">All</button>
@@ -211,8 +214,16 @@ interface ShownGroup extends CategoryGroup {
       min-height: 0;
       border-right: 1px solid var(--border);
     }
+    .header {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem;
+    }
     .filter {
-      margin: 0.75rem;
+      flex: 1;
+      min-width: 0;
     }
     ul {
       flex: 1;

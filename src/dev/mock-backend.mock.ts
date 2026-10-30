@@ -280,7 +280,11 @@ const handlers: Record<string, (args: Args) => unknown> = {
   // Native playback needs libmpv in the desktop app; the mock uses the webview player.
   player_available: () => false,
   catalogue_get: ({ list }) => catalogue(list),
-  catalogue_refresh: ({ list }) => ({ ...catalogue(list), items: null }),
+  // Slow enough to see the refresh indicator.
+  catalogue_refresh: async ({ list }) => {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    return { ...catalogue(list), items: null };
+  },
   xtream: ({ action, query = {} }) => {
     switch (action) {
       case 'get_short_epg':

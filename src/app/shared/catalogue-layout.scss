@@ -1,7 +1,7 @@
 // Shared layout for pages with a category sidebar and a scrollable content column.
 :host {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 300px 1fr;
   height: 100%;
 }
 

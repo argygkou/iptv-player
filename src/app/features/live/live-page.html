@@ -4,7 +4,9 @@
   [categories]="categories.value()"
   [selected]="category() ?? null"
   (selectedChange)="selectCategory($event)"
-/>
+>
+  <app-catalogue-refresh [lists]="lists" />
+</app-category-list>
 
 <section class="content channels">
   <div class="toolbar">
@@ -15,7 +17,6 @@
       (input)="search.set($any($event.target).value)"
     />
     <span class="count">{{ visibleStreams().length }}</span>
-    <app-catalogue-refresh [lists]="lists" />
   </div>
   <ul class="scroll">
     @if (streams.isLoading()) {

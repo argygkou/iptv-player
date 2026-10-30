@@ -22,7 +22,9 @@ import { filterByName } from '../../shared/search';
       [categories]="categories.value()"
       [selected]="category() ?? null"
       (selectedChange)="selectCategory($event)"
-    />
+    >
+      <app-catalogue-refresh [lists]="lists" />
+    </app-category-list>
     <section class="content">
       <div class="toolbar">
         <input
@@ -32,7 +34,6 @@ import { filterByName } from '../../shared/search';
           (input)="search.set($any($event.target).value)"
         />
         <span class="count">{{ items().length }} titles</span>
-        <app-catalogue-refresh [lists]="lists" />
       </div>
       <div class="scroll">
         @if (saved(); as saved) {

@@ -3,7 +3,11 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 
 import { CachedList } from '../core/xtream/catalogue-store';
 
-/** Downloads the page's lists again; the title says how old they are. */
+/**
+ * Icon button that downloads the page's lists again, for the category list's
+ * header. While any list refreshes, in the background or on request, the icon
+ * spins and a bar runs along the bottom of the header.
+ */
 @Component({
   selector: 'app-catalogue-refresh',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -11,16 +15,98 @@ import { CachedList } from '../core/xtream/catalogue-store';
   template: `
     <button
       type="button"
+      class="refresh"
+      [class.spinning]="refreshing()"
       [disabled]="refreshing()"
-      [title]="updatedAt() ? 'Updated ' + (updatedAt() | date: 'EEE d MMM, HH:mm') : ''"
+      [attr.aria-label]="refreshing() ? 'Updating lists' : 'Update lists'"
+      [title]="
+        refreshing()
+          ? 'Updating lists…'
+          : 'Update lists' +
+            (updatedAt() ? ' (updated ' + (updatedAt() | date: 'EEE d MMM, HH:mm') + ')' : '')
+      "
       (click)="refresh()"
     >
-      {{ refreshing() ? 'Updating…' : 'Update list' }}
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+        <path d="M20 4v5h-5" />
+      </svg>
     </button>
+    @if (refreshing()) {
+      <span class="bar" role="progressbar" aria-label="Updating lists"></span>
+    }
   `,
   styles: `
-    :host {
-      margin-left: auto;
+    .refresh {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: none;
+      color: var(--text-muted);
+      cursor: pointer;
+
+      &:hover:not(:disabled) {
+        color: var(--text);
+        background: var(--surface-hover);
+      }
+
+      &:disabled {
+        cursor: default;
+        color: var(--accent);
+      }
+    }
+    svg {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .spinning svg {
+      animation: spin 0.9s linear infinite;
+    }
+    /* Positioned against the category list's header. */
+    .bar {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 2px;
+      overflow: hidden;
+
+      &::after {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 30%;
+        background: var(--accent);
+        animation: slide 1.2s ease-in-out infinite;
+      }
+    }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    @keyframes slide {
+      from {
+        transform: translateX(-100%);
+      }
+      to {
+        transform: translateX(340%);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .spinning svg,
+      .bar::after {
+        animation-duration: 3s;
+      }
     }
   `,
 })
