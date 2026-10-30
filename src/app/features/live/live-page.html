@@ -1,4 +1,5 @@
 <app-category-list
+  kind="live"
   [extras]="extras"
   [categories]="categories.value()"
   [selected]="category() ?? null"
@@ -22,7 +23,7 @@
     } @else if (streams.error()) {
       <li class="status error">{{ streams.error() }}</li>
     }
-    @for (stream of visibleStreams(); track stream.stream_id) {
+    @for (stream of shownStreams(); track stream.stream_id) {
       <li>
         <button
           type="button"
@@ -44,6 +45,9 @@
       @if (!streams.isLoading() && category() === favouritesId && !search()) {
         <li class="status">Star a channel to add it here.</li>
       }
+    }
+    @if (channelLimit() < visibleStreams().length) {
+      <li class="sentinel" (appInView)="channelLimit.set(channelLimit() + channelPage)"></li>
     }
   </ul>
 </section>

@@ -8,7 +8,7 @@ use tauri::State;
 use crate::catalogue::{List, Snapshot};
 use crate::epg::Programme;
 use crate::error::{AppError, AppResult};
-use crate::library::{Item, ItemKind, Library};
+use crate::library::{Catalogue, CategoryPrefs, Item, ItemKind, Library};
 use crate::profiles::Profile;
 use crate::proxy::parse_file;
 use crate::secrets;
@@ -248,4 +248,14 @@ pub fn library_forget(
     id: String,
 ) -> AppResult<Library> {
     state.library.forget(kind, &id)
+}
+
+/// Replaces how the catalogue's categories are pinned and hidden.
+#[tauri::command]
+pub fn library_set_categories(
+    state: State<'_, Arc<AppState>>,
+    catalogue: Catalogue,
+    prefs: CategoryPrefs,
+) -> AppResult<Library> {
+    state.library.set_categories(catalogue, prefs)
 }

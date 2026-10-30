@@ -1,7 +1,8 @@
 import { Injectable } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 
-import { Library, LibraryItem, LibraryKind, Progress } from './library.models';
+import { StreamKind } from '../xtream/xtream.models';
+import { CategoryPrefs, Library, LibraryItem, LibraryKind, Progress } from './library.models';
 
 /** The backend's library commands; each returns the updated library. */
 @Injectable({ providedIn: 'root' })
@@ -24,6 +25,10 @@ export class LibraryApi {
 
   forget(kind: LibraryKind, id: string): Promise<Library> {
     return invoke<Library>('library_forget', { kind, id });
+  }
+
+  setCategories(catalogue: StreamKind, prefs: CategoryPrefs): Promise<Library> {
+    return invoke<Library>('library_set_categories', { catalogue, prefs });
   }
 }
 

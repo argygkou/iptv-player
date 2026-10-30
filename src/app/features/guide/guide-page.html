@@ -2,8 +2,26 @@
   <label>
     Category
     <select [value]="activeCategory() ?? ''" (change)="selectCategory($any($event.target).value)">
-      @for (category of categories.value(); track category.category_id) {
-        <option [value]="category.category_id">{{ category.category_name }}</option>
+      @let menu = categoryMenu();
+      @if (menu.pinned.length) {
+        <optgroup label="Pinned">
+          @for (category of menu.pinned; track category.category_id) {
+            <option [value]="category.category_id">{{ category.category_name }}</option>
+          }
+        </optgroup>
+      }
+      @for (group of menu.groups; track group.key) {
+        @if (menu.groups.length === 1 && !menu.pinned.length) {
+          @for (entry of group.categories; track entry.category.category_id) {
+            <option [value]="entry.category.category_id">{{ entry.category.category_name }}</option>
+          }
+        } @else {
+          <optgroup [label]="group.name">
+            @for (entry of group.categories; track entry.category.category_id) {
+              <option [value]="entry.category.category_id">{{ entry.label }}</option>
+            }
+          </optgroup>
+        }
       }
     </select>
   </label>

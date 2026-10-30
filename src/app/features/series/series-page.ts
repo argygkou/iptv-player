@@ -5,6 +5,7 @@ import { LibraryStore } from '../../core/library/library-store';
 import { watchedFraction } from '../../core/library/library.models';
 import { CatalogueStore, inCategory } from '../../core/xtream/catalogue-store';
 import { CatalogueRefresh } from '../../shared/catalogue-refresh';
+import { hiddenCategoryIds, withoutHidden } from '../../shared/category-groups';
 import { CategoryList } from '../../shared/category-list';
 import { PosterGrid, PosterItem } from '../../shared/poster-grid';
 import { CONTINUE, FAVOURITES, isSavedList } from '../../shared/saved-lists';
@@ -16,6 +17,7 @@ import { filterByName } from '../../shared/search';
   imports: [CatalogueRefresh, CategoryList, PosterGrid],
   template: `
     <app-category-list
+      kind="series"
       [extras]="extras"
       [categories]="categories.value()"
       [selected]="category() ?? null"
@@ -59,9 +61,19 @@ export class SeriesPage {
   protected readonly categories = this.catalogue.seriesCategories.load();
   protected readonly series = this.catalogue.series.load();
   protected readonly lists = [this.categories, this.series];
-  private readonly listed = computed(() =>
-    isSavedList(this.category()) ? [] : inCategory(this.series.value(), this.category()),
-  );
+  /** "All" leaves out the categories the user hid. */
+  private readonly listed = computed(() => {
+    const category = this.category();
+    if (isSavedList(category)) {
+      return [];
+    }
+    const items = this.series.value();
+    if (category !== undefined) {
+      return inCategory(items, category);
+    }
+    const prefs = this.library.categoryPrefs('series');
+    return withoutHidden(items, hiddenCategoryIds(this.categories.value(), prefs));
+  });
   /** Favourite shows, or episodes to continue, when one of those lists is selected. */
   protected readonly saved = computed<PosterItem[] | null>(() => {
     switch (this.category()) {
