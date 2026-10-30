@@ -1,4 +1,9 @@
-/** What the user keeps: favourites and watch history, saved per profile by the backend. */
+import { StreamKind } from '../xtream/xtream.models';
+
+/**
+ * What the user keeps: favourites, watch history and how they arranged the
+ * provider's categories, saved per profile by the backend.
+ */
 export type LibraryKind = 'live' | 'movie' | 'series' | 'episode';
 
 /** Enough to list and open an item without asking the provider again. */
@@ -26,10 +31,24 @@ export interface Watched extends LibraryItem {
   duration: number;
 }
 
+/** How the user arranged one catalogue's categories. */
+export interface CategoryPrefs {
+  /** Category ids shown above the rest, in the order they were pinned. */
+  pinned: string[];
+  /** Category ids left out of the sidebar and of "All". */
+  hidden: string[];
+  /** Whole groups left out, by group key (see `groupKey`). */
+  hiddenGroups: string[];
+}
+
+export const NO_CATEGORY_PREFS: CategoryPrefs = { pinned: [], hidden: [], hiddenGroups: [] };
+
 /** Both lists are newest first. */
 export interface Library {
   favourites: Favourite[];
   history: Watched[];
+  /** Only catalogues the user arranged have an entry. */
+  categories: Partial<Record<StreamKind, CategoryPrefs>>;
 }
 
 /** A player's position in the current file, in seconds. */
@@ -39,7 +58,7 @@ export interface Progress {
   duration: number | null;
 }
 
-export const EMPTY_LIBRARY: Library = { favourites: [], history: [] };
+export const EMPTY_LIBRARY: Library = { favourites: [], history: [], categories: {} };
 
 /** Less than this in is not worth resuming. */
 const MIN_RESUME = 30;

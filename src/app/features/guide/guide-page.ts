@@ -10,10 +10,12 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 
+import { LibraryStore } from '../../core/library/library-store';
 import { canCatchUp, isAiring } from '../../core/xtream/epg';
 import { TvGuide } from '../../core/xtream/tv-guide';
 import { XtreamApi } from '../../core/xtream/xtream-api';
-import { LiveStream, Programme } from '../../core/xtream/xtream.models';
+import { Category, LiveStream, Programme } from '../../core/xtream/xtream.models';
+import { groupCategories, isCategoryHidden } from '../../shared/category-groups';
 import { Clock } from '../../shared/clock';
 
 const MINUTE = 60_000;
@@ -63,6 +65,7 @@ export class GuidePage {
   private readonly api = inject(XtreamApi);
   private readonly router = inject(Router);
   private readonly clock = inject(Clock);
+  private readonly library = inject(LibraryStore);
   protected readonly tvGuide = inject(TvGuide);
 
   readonly category = input<string>();
@@ -72,11 +75,27 @@ export class GuidePage {
   protected readonly refreshing = signal(false);
 
   protected readonly categories = resource({ loader: () => this.api.liveCategories() });
-  protected readonly activeCategory = computed(
-    () =>
-      this.category() ??
-      (this.categories.hasValue() ? this.categories.value()[0]?.category_id : undefined),
-  );
+  /** The live categories as the sidebar arranges them: pinned first, grouped, none hidden. */
+  protected readonly categoryMenu = computed(() => {
+    const prefs = this.library.categoryPrefs('live');
+    const all = this.categories.hasValue() ? this.categories.value() : [];
+    // The category opened from a link stays listed even if hidden, so the menu matches.
+    const shown = (c: Category) => !isCategoryHidden(c, prefs) || c.category_id === this.category();
+    const byId = new Map(all.filter(shown).map((c) => [c.category_id, c]));
+    return {
+      pinned: prefs.pinned.flatMap((id) => byId.get(id) ?? []),
+      // Grouped before filtering, so the groups match the sidebar's.
+      groups: groupCategories(all).flatMap((group) => {
+        const categories = group.categories.filter((entry) => shown(entry.category));
+        return categories.length ? [{ ...group, categories }] : [];
+      }),
+    };
+  });
+  protected readonly activeCategory = computed<string | undefined>(() => {
+    const { pinned, groups } = this.categoryMenu();
+    const first = pinned.at(0) ?? groups.at(0)?.categories.at(0)?.category;
+    return this.category() ?? first?.category_id;
+  });
   protected readonly channels = resource({
     params: () => this.activeCategory(),
     loader: ({ params }) => this.api.liveStreams(params),

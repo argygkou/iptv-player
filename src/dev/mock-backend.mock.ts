@@ -30,6 +30,10 @@ const liveCategories = [
   category('2', 'Greece | Entertainment'),
   category('3', 'UK | Sports'),
   category('4', 'Documentaries'),
+  category('5', 'UK | News'),
+  category('6', '|DE| Sport'),
+  category('7', '|DE| Kinder'),
+  category('8', 'Greece | Sports'),
 ];
 const liveStreams = liveCategories.flatMap((c, ci) =>
   Array.from({ length: 12 }, (_, i) => ({
@@ -175,9 +179,14 @@ interface MockItem {
 interface MockLibrary {
   favourites: (MockItem & { addedAt: number })[];
   history: (MockItem & { watchedAt: number; position: number; duration: number })[];
+  categories: Record<string, unknown>;
 }
-const loadLibrary = (): MockLibrary =>
-  JSON.parse(localStorage.getItem(LIBRARY_KEY) ?? 'null') ?? { favourites: [], history: [] };
+const loadLibrary = (): MockLibrary => ({
+  favourites: [],
+  history: [],
+  categories: {},
+  ...JSON.parse(localStorage.getItem(LIBRARY_KEY) ?? 'null'),
+});
 const updateLibrary = (change: (library: MockLibrary) => void): MockLibrary => {
   const library = loadLibrary();
   change(library);
@@ -263,6 +272,10 @@ const handlers: Record<string, (args: Args) => unknown> = {
   library_forget: ({ kind, id }) =>
     updateLibrary((library) => {
       library.history = library.history.filter((w) => !same({ kind, id })(w));
+    }),
+  library_set_categories: ({ catalogue, prefs }) =>
+    updateLibrary((library) => {
+      library.categories = { ...library.categories, [catalogue as string]: prefs };
     }),
   // Native playback needs libmpv in the desktop app; the mock uses the webview player.
   player_available: () => false,

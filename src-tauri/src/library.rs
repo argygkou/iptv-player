@@ -1,9 +1,11 @@
-//! The user's own lists: favourites and watch history, with resume positions.
+//! The user's own lists: favourites and watch history, with resume positions,
+//! and how they arranged the provider's categories.
 //!
 //! Each saved profile has its own file, `library/<profile id>.json` in the app
 //! data directory, opened on sign-in. A one-off sign-in (no saved profile) gets
 //! an in-memory library that is dropped on sign-out.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -16,6 +18,8 @@ use crate::error::{AppError, AppResult};
 const DIR_NAME: &str = "library";
 /// Oldest entries beyond this are dropped from the history.
 const HISTORY_LIMIT: usize = 200;
+/// More pinned or hidden categories than any panel has.
+const CATEGORY_LIMIT: usize = 5000;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -73,12 +77,57 @@ pub struct Watched {
     pub duration: f64,
 }
 
+/// The provider catalogue a category belongs to.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "lowercase")]
+pub enum Catalogue {
+    Live,
+    Movie,
+    Series,
+}
+
+/// How the user arranged one catalogue's categories.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryPrefs {
+    /// Category ids shown above the rest, in the order they were pinned.
+    #[serde(default)]
+    pub pinned: Vec<String>,
+    /// Category ids left out of the sidebar and of "All".
+    #[serde(default)]
+    pub hidden: Vec<String>,
+    /// Whole groups (such as a country prefix) left out, by group key.
+    #[serde(default)]
+    pub hidden_groups: Vec<String>,
+}
+
+impl CategoryPrefs {
+    /// Drops duplicates and empty ids, and caps each list.
+    fn cleaned(self) -> Self {
+        let clean = |list: Vec<String>| {
+            let mut seen = std::collections::HashSet::new();
+            list.into_iter()
+                .filter(|id| !id.is_empty() && seen.insert(id.clone()))
+                .take(CATEGORY_LIMIT)
+                .collect()
+        };
+        Self {
+            pinned: clean(self.pinned),
+            hidden: clean(self.hidden),
+            hidden_groups: clean(self.hidden_groups),
+        }
+    }
+}
+
 /// Newest first in both lists.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Library {
     pub favourites: Vec<Favourite>,
     pub history: Vec<Watched>,
+    /// Missing from libraries saved before categories could be arranged.
+    #[serde(default)]
+    pub categories: BTreeMap<Catalogue, CategoryPrefs>,
 }
 
 impl Library {
@@ -131,6 +180,15 @@ impl Library {
 
     fn forget(&mut self, kind: ItemKind, id: &str) {
         self.history.retain(|w| !w.item.is(kind, id));
+    }
+
+    fn set_categories(&mut self, catalogue: Catalogue, prefs: CategoryPrefs) {
+        let prefs = prefs.cleaned();
+        if prefs == CategoryPrefs::default() {
+            self.categories.remove(&catalogue);
+        } else {
+            self.categories.insert(catalogue, prefs);
+        }
     }
 }
 
@@ -217,6 +275,10 @@ impl LibraryStore {
 
     pub fn forget(&self, kind: ItemKind, id: &str) -> AppResult<Library> {
         self.update(|data| data.forget(kind, id))
+    }
+
+    pub fn set_categories(&self, catalogue: Catalogue, prefs: CategoryPrefs) -> AppResult<Library> {
+        self.update(|data| data.set_categories(catalogue, prefs))
     }
 
     /// Applies `change`, saves when something changed, and returns the result.
@@ -364,6 +426,39 @@ mod tests {
         }
         assert_eq!(library.history.len(), HISTORY_LIMIT);
         assert_eq!(library.history[0].item.id, (HISTORY_LIMIT + 4).to_string());
+    }
+
+    #[test]
+    fn category_prefs_are_cleaned_and_dropped_when_empty() {
+        let mut library = Library::default();
+        library.set_categories(
+            Catalogue::Live,
+            CategoryPrefs {
+                pinned: vec!["3".into(), "".into(), "3".into(), "1".into()],
+                hidden: vec!["7".into()],
+                hidden_groups: vec!["UK".into(), "UK".into()],
+            },
+        );
+        let live = &library.categories[&Catalogue::Live];
+        assert_eq!(live.pinned, ["3", "1"]);
+        assert_eq!(live.hidden_groups, ["UK"]);
+
+        library.set_categories(Catalogue::Live, CategoryPrefs::default());
+        assert!(library.categories.is_empty());
+    }
+
+    #[test]
+    fn reads_libraries_saved_before_categories() {
+        let library: Library = serde_json::from_str(r#"{"favourites":[],"history":[]}"#).unwrap();
+        assert!(library.categories.is_empty());
+        let json = serde_json::to_string(&Library {
+            categories: BTreeMap::from([(Catalogue::Movie, CategoryPrefs::default())]),
+            ..Library::default()
+        })
+        .unwrap();
+        assert!(
+            json.contains(r#""categories":{"movie":{"pinned":[],"hidden":[],"hiddenGroups":[]}}"#)
+        );
     }
 
     #[test]
