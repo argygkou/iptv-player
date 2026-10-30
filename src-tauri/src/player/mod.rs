@@ -229,12 +229,12 @@ impl Native {
         let log_dir = app.path().app_log_dir().map_err(failed)?;
         std::fs::create_dir_all(&log_dir)?;
         let log_file = log_dir.join("mpv.log").to_string_lossy().into_owned();
-        // uosc, a modern on-screen interface, when it is bundled; mpv's own
-        // controller otherwise. Its config directory holds nothing but uosc.
+        // ModernZ, a modern YouTube-style controller, when it is bundled; mpv's
+        // own controller otherwise. Its config directory holds nothing else.
         let config_dir = app.path().resource_dir().map_err(failed)?.join("mpv");
         // `resource_dir` can be a `\\?\` path, where the `/` mpv appends to reach
         // `scripts` and `fonts` is not a separator, so mpv would find neither.
-        let config_dir = config_dir.join("scripts/uosc/main.lua").is_file().then(|| {
+        let config_dir = config_dir.join("scripts/modernz.lua").is_file().then(|| {
             let dir = config_dir.to_string_lossy();
             dir.trim_start_matches(r"\\?\").to_owned()
         });
@@ -264,7 +264,7 @@ impl Native {
                 ("osc", "no"),
                 ("osd-bar", "no"),
                 // The app window has its own title bar and controls.
-                ("script-opts", "uosc-top_bar=never"),
+                ("script-opts", "modernz-window_top_bar=no"),
             ]),
             None => options.extend([
                 ("osc", "yes"),
