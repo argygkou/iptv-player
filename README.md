@@ -10,7 +10,7 @@ Windows is the first target; Linux and iOS are planned (see [Roadmap](#roadmap))
 - Sign in with Xtream Codes credentials. "Keep me signed in" saves the account as a profile, so the next launch
   opens straight on Live TV. Several accounts can be saved and picked on the sign-in screen.
 - **Native playback** through libmpv: MKV, HEVC, AC3/DTS, subtitles and audio tracks all play. mpv's on-screen
-  controller handles seeking and track selection; double-click or press `F` for fullscreen, `Esc` to leave it.
+  controller ([uosc](https://github.com/tomasklaen/uosc)) handles seeking, volume and track selection; double-click or press `F` for fullscreen, `Esc` to leave it.
 - **Live TV**: categories, channel search, now/next EPG with progress.
 - **TV Guide**: a timeline grid per category (six hours around now); click a channel to watch it.
 - **Movies**: category browser, poster grid with search and incremental rendering, details and playback.
@@ -108,6 +108,8 @@ installer with a code-signing certificate. See the
 
 ## Known limitations
 
+- The player controls are [uosc](https://github.com/tomasklaen/uosc) (LGPL-2.1), bundled in `mpv/` next to the
+  executable; without it, mpv's built-in controller is used.
 - `libmpv-2.dll` comes from the [mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases)
   builds (pinned to release `20261021` and checked by SHA-256 in `scripts/fetch-libmpv.mjs`). Those builds are GPL-licensed, which matters if the
   app is ever distributed.

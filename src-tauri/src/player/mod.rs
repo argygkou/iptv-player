@@ -229,36 +229,52 @@ impl Native {
         let log_dir = app.path().app_log_dir().map_err(failed)?;
         std::fs::create_dir_all(&log_dir)?;
         let log_file = log_dir.join("mpv.log").to_string_lossy().into_owned();
-        let mpv = mpv::Mpv::new(
-            library,
-            &[
-                ("wid", &wid),
-                ("idle", "yes"),
-                ("force-window", "yes"),
-                ("keep-open", "yes"),
-                ("hwdec", "auto-safe"),
-                // Reconnect dropped HTTP streams instead of ending playback.
-                (
-                    "stream-lavf-o",
-                    "reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=5",
-                ),
-                // Only relay URLs may be played; never files dropped on the video.
-                ("drag-and-drop", "no"),
+        // uosc, a modern on-screen interface, when it is bundled; mpv's own
+        // controller otherwise. Its config directory holds nothing but uosc.
+        let config_dir = app.path().resource_dir().map_err(failed)?.join("mpv");
+        let config_dir = config_dir
+            .join("scripts/uosc/main.lua")
+            .is_file()
+            .then(|| config_dir.to_string_lossy().into_owned());
+        let mut options = vec![
+            ("wid", wid.as_str()),
+            ("idle", "yes"),
+            ("force-window", "yes"),
+            ("keep-open", "yes"),
+            ("hwdec", "auto-safe"),
+            // Reconnect dropped HTTP streams instead of ending playback.
+            (
+                "stream-lavf-o",
+                "reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=5",
+            ),
+            // Only relay URLs may be played; never files dropped on the video.
+            ("drag-and-drop", "no"),
+            ("input-default-bindings", "yes"),
+            ("input-vo-keyboard", "yes"),
+            ("ytdl", "no"),
+            ("network-timeout", "20"),
+            ("log-file", log_file.as_str()),
+        ];
+        match &config_dir {
+            Some(dir) => options.extend([
+                ("config-dir", dir.as_str()),
+                ("config", "yes"),
+                ("osc", "no"),
+                ("osd-bar", "no"),
+                // The app window has its own title bar and controls.
+                ("script-opts", "uosc-top_bar=never"),
+            ]),
+            None => options.extend([
                 ("osc", "yes"),
-                // Show the controller on any mouse movement over the video, not just
-                // the bottom half, and keep it up a little longer than mpv does.
+                // Show the controller on any mouse movement over the video, not
+                // just the bottom half, and keep it up a little longer.
                 (
                     "script-opts",
                     "osc-windowcontrols=no,osc-deadzonesize=0,osc-hidetimeout=2500",
                 ),
-                ("input-default-bindings", "yes"),
-                ("input-vo-keyboard", "yes"),
-                ("ytdl", "no"),
-                ("network-timeout", "20"),
-                ("log-file", &log_file),
-            ],
-        )
-        .map_err(AppError::Playback)?;
+            ]),
+        }
+        let mpv = mpv::Mpv::new(library, &options).map_err(AppError::Playback)?;
         mpv.observe_flag("fullscreen").map_err(AppError::Playback)?;
         // `q` would shut mpv down for good; the app owns the player's lifetime.
         for key in ["q", "Q"] {

@@ -2,7 +2,8 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "bundle": {
     "resources": {
-      "lib/libmpv-2.dll": "libmpv-2.dll"
+      "lib/libmpv-2.dll": "libmpv-2.dll",
+      "mpv/**/*": "mpv/"
     }
   }
 }

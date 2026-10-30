@@ -71,8 +71,9 @@ jobs:
         shell: pwsh
         run: |
           if (-not (Test-Path src-tauri/target/release/libmpv-2.dll)) { throw 'libmpv-2.dll missing from the release build' }
-      - name: Show libmpv source
-        run: cat src-tauri/lib/libmpv.json
+          if (-not (Test-Path src-tauri/target/release/mpv/scripts/uosc/main.lua)) { throw 'uosc missing from the release build' }
+      - name: Show player package sources
+        run: cat src-tauri/lib/*.json
       - uses: actions/upload-artifact@v4
         with:
           name: infinite-iptv-windows
