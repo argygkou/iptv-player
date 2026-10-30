@@ -1,4 +1,5 @@
 mod commands;
+mod epg;
 mod error;
 mod library;
 mod player;
@@ -49,6 +50,8 @@ pub fn run() {
             commands::logout,
             commands::xtream,
             commands::stream_url,
+            commands::catchup_url,
+            commands::epg_guide,
             commands::library_get,
             commands::library_set_favourite,
             commands::library_record,

@@ -49,7 +49,12 @@
 
 <section class="content now-playing">
   @if (playback.hasValue()) {
-    <app-video-player [src]="playback.value()" [live]="true" [item]="item()" />
+    <!-- A recording is not a visit to the channel, so it stays out of the history. -->
+    <app-video-player
+      [src]="playback.value()"
+      [live]="!recording()"
+      [item]="recording() ? undefined : item()"
+    />
   } @else {
     <div class="idle">
       @if (playback.error()) {
@@ -67,11 +72,30 @@
     </div>
   }
 
+  @if (recording(); as recording) {
+    <div class="catchup-banner">
+      <span
+        >Catch-up: <strong>{{ recording.title }}</strong
+        >, {{ recording.start | date: 'EEE HH:mm' }}–{{ recording.end | date: 'HH:mm' }}</span
+      >
+      <button type="button" (click)="backToLive()">Back to live</button>
+    </div>
+  }
+
   @if (epg.hasValue()) {
-    <ol class="epg scroll">
-      @for (programme of epg.value(); track programme.start.getTime()) {
-        <li [class.airing]="isAiring(programme)">
-          <time>{{ programme.start | date: 'HH:mm' }} – {{ programme.end | date: 'HH:mm' }}</time>
+    <ol class="epg scroll" #epgList>
+      @for (programme of programmes(); track programme.start.getTime()) {
+        <li [class.airing]="isAiring(programme)" [class.playing]="isPlaying(programme)">
+          <div class="when">
+            <time
+              >{{ programme.start | date: 'EEE HH:mm' }} – {{ programme.end | date: 'HH:mm' }}</time
+            >
+            @if (canCatchUp(programme) && !isPlaying(programme)) {
+              <button type="button" class="replay" (click)="watchRecording(programme)">
+                {{ isAiring(programme) ? '⟲ Start over' : '▶ Watch' }}
+              </button>
+            }
+          </div>
           <strong>{{ programme.title }}</strong>
           @if (isAiring(programme)) {
             <progress [value]="progress(programme)" max="1"></progress>

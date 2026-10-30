@@ -20,6 +20,8 @@ pub enum AppError {
     MissingSecret,
     #[error("Playback failed: {0}")]
     Playback(String),
+    #[error("TV guide unavailable: {0}")]
+    Epg(String),
     #[error("Could not save app data: {0}")]
     Storage(String),
 }

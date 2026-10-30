@@ -16,8 +16,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use serde::Deserialize;
 
+use crate::commands::MAX_CATCHUP_MINUTES;
 use crate::state::AppState;
-use crate::xtream::StreamKind;
+use crate::xtream::{StreamKind, is_timeshift_start};
 
 pub async fn serve(listener: std::net::TcpListener, state: Arc<AppState>) {
     let listener = match tokio::net::TcpListener::from_std(listener) {
@@ -29,6 +30,10 @@ pub async fn serve(listener: std::net::TcpListener, state: Arc<AppState>) {
     };
     let app = Router::new()
         .route("/{kind}/{file}", get(relay).options(preflight))
+        .route(
+            "/timeshift/{duration}/{start}/{file}",
+            get(relay_timeshift).options(preflight),
+        )
         .with_state(state);
     if let Err(err) = axum::serve(listener, app).await {
         log::error!("stream proxy stopped: {err}");
@@ -64,8 +69,41 @@ async fn relay(
     let Ok(creds) = state.credentials().await else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
+    forward(&state, creds.stream_url(kind, id, ext), &headers).await
+}
 
-    let mut request = state.http.get(creds.stream_url(kind, id, ext));
+/// Catch-up: a recorded stretch of a live channel.
+async fn relay_timeshift(
+    State(state): State<Arc<AppState>>,
+    Path((duration, start, file)): Path<(String, String, String)>,
+    Query(query): Query<TokenQuery>,
+    headers: HeaderMap,
+) -> Response {
+    if query.t != state.proxy_token {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let duration = duration
+        .parse::<u32>()
+        .ok()
+        .filter(|d| (1..=MAX_CATCHUP_MINUTES).contains(d));
+    let (Some(duration), true, Some((id, ext))) =
+        (duration, is_timeshift_start(&start), parse_file(&file))
+    else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let Ok(creds) = state.credentials().await else {
+        return StatusCode::UNAUTHORIZED.into_response();
+    };
+    forward(
+        &state,
+        creds.timeshift_url(duration, &start, id, ext),
+        &headers,
+    )
+    .await
+}
+
+async fn forward(state: &AppState, url: url::Url, headers: &HeaderMap) -> Response {
+    let mut request = state.http.get(url);
     if let Some(range) = headers.get(header::RANGE) {
         request = request.header(header::RANGE, range);
     }
@@ -139,8 +177,8 @@ mod tests {
     /// Relays through a fake panel, checking the token, URL layout and Range passthrough.
     #[tokio::test]
     async fn relays_streams_from_the_signed_in_panel() {
-        let upstream =
-            Router::new().route(
+        let upstream = Router::new()
+            .route(
                 "/movie/{user}/{pass}/{file}",
                 get(
                     |Path((user, pass, file)): Path<(String, String, String)>,
@@ -155,6 +193,20 @@ mod tests {
                             [(header::CONTENT_RANGE, "bytes 0-9/100")],
                             format!("{user}:{pass}:{file}:{range}"),
                         )
+                    },
+                ),
+            )
+            .route(
+                "/timeshift/{user}/{pass}/{duration}/{start}/{file}",
+                get(
+                    |Path((user, pass, duration, start, file)): Path<(
+                        String,
+                        String,
+                        String,
+                        String,
+                        String,
+                    )>| async move {
+                        format!("{user}:{pass}:{duration}:{start}:{file}")
                     },
                 ),
             );
@@ -193,5 +245,22 @@ mod tests {
             response.text().await.unwrap(),
             "user:secret:42.mp4:bytes=0-9"
         );
+
+        let catchup = format!(
+            "http://127.0.0.1:{}/timeshift/60/2026-10-30:20-00/7.ts?t={}",
+            state.proxy_port, state.proxy_token
+        );
+        let response = client.get(catchup).send().await.unwrap();
+        assert_eq!(
+            response.text().await.unwrap(),
+            "user:secret:60:2026-10-30:20-00:7.ts"
+        );
+
+        let bad_start = format!(
+            "http://127.0.0.1:{}/timeshift/60/yesterday/7.ts?t={}",
+            state.proxy_port, state.proxy_token
+        );
+        let response = client.get(bad_start).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }

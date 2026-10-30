@@ -97,6 +97,22 @@
     border-left: 3px solid var(--accent);
   }
 
+  .playing {
+    background: var(--accent-soft);
+  }
+
+  .when {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .replay {
+    padding: 0.15rem 0.6rem;
+    font-size: 0.8rem;
+  }
+
   time {
     font-size: 0.8rem;
     color: var(--text-muted);
@@ -112,6 +128,16 @@
     width: 100%;
     height: 4px;
   }
+}
+
+.catchup-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
 }
 
 .error {

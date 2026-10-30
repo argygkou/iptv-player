@@ -59,7 +59,10 @@ export interface LiveStream {
   stream_icon: string;
   epg_channel_id: string | null;
   category_id: string;
-  tv_archive: number;
+  /** 1 when the panel records the channel for catch-up. */
+  tv_archive: XtreamId;
+  /** How many days back the recordings go. */
+  tv_archive_duration?: XtreamId;
 }
 
 export interface VodStream {
@@ -152,6 +155,20 @@ export interface EpgListing {
 
 export interface ShortEpgResponse {
   epg_listings: EpgListing[];
+}
+
+/** A programme from the backend's XMLTV guide; times are Unix seconds. */
+export interface GuideProgramme {
+  start: number;
+  end: number;
+  title: string;
+  description: string;
+}
+
+export interface GuideWindow {
+  updatedAt: number;
+  /** By XMLTV channel id; channels without programmes are left out. */
+  programmes: Record<string, GuideProgramme[]>;
 }
 
 /** A decoded EPG entry. */
