@@ -71,6 +71,15 @@
   }
 }
 
+// On a large or maximised window a full-width 16:9 player would push the
+// programme list off screen, so the player is capped at about half the height.
+app-video-player,
+.idle {
+  flex: none;
+  width: min(100%, calc(55vh * 16 / 9));
+  align-self: center;
+}
+
 .idle {
   display: grid;
   place-items: center;
@@ -81,6 +90,7 @@
 }
 
 .epg {
+  min-height: 10rem;
   list-style: none;
   margin: 0;
   padding: 0;
