@@ -2,10 +2,8 @@
   <label>
     Category
     <select [value]="activeCategory() ?? ''" (change)="selectCategory($any($event.target).value)">
-      @if (categories.hasValue()) {
-        @for (category of categories.value(); track category.category_id) {
-          <option [value]="category.category_id">{{ category.category_name }}</option>
-        }
+      @for (category of categories.value(); track category.category_id) {
+        <option [value]="category.category_id">{{ category.category_name }}</option>
       }
     </select>
   </label>
@@ -15,7 +13,7 @@
     <button type="button" (click)="move(step)" [disabled]="!canGoLater()">Later ▶</button>
     <span class="day">{{ windowStart() | date: 'EEE d MMM' }}</span>
   </div>
-  @if (channels.isLoading() || guide.isLoading()) {
+  @if (loadingChannels() || guide.isLoading()) {
     <span class="muted">Loading guide…</span>
   }
   <span class="spacer"></span>
@@ -41,8 +39,8 @@
     </div>
   </div>
 
-  @if (channels.hasValue()) {
-    @for (stream of channels.value(); track stream.stream_id) {
+  @if (channels().length) {
+    @for (stream of channels(); track stream.stream_id) {
       <div class="row" [style.width.px]="timelineWidth">
         <button
           type="button"
@@ -92,7 +90,7 @@
         </div>
       </div>
     }
-  } @else if (channels.error()) {
-    <p class="error">{{ channels.error() }}</p>
+  } @else if (channelsError()) {
+    <p class="error">{{ channelsError() }}</p>
   }
 </div>

@@ -11,8 +11,8 @@ import {
 import { Router } from '@angular/router';
 
 import { canCatchUp, isAiring } from '../../core/xtream/epg';
+import { CatalogueStore, inCategory } from '../../core/xtream/catalogue-store';
 import { TvGuide } from '../../core/xtream/tv-guide';
-import { XtreamApi } from '../../core/xtream/xtream-api';
 import { LiveStream, Programme } from '../../core/xtream/xtream.models';
 import { Clock } from '../../shared/clock';
 
@@ -60,7 +60,6 @@ export function programmeAction(
   styleUrl: './guide-page.scss',
 })
 export class GuidePage {
-  private readonly api = inject(XtreamApi);
   private readonly router = inject(Router);
   private readonly clock = inject(Clock);
   protected readonly tvGuide = inject(TvGuide);
@@ -71,16 +70,19 @@ export class GuidePage {
   protected readonly shift = signal(0);
   protected readonly refreshing = signal(false);
 
-  protected readonly categories = resource({ loader: () => this.api.liveCategories() });
-  protected readonly activeCategory = computed(
-    () =>
-      this.category() ??
-      (this.categories.hasValue() ? this.categories.value()[0]?.category_id : undefined),
+  private readonly catalogue = inject(CatalogueStore);
+  protected readonly categories = this.catalogue.liveCategories.load();
+  private readonly allChannels = this.catalogue.liveStreams.load();
+  protected readonly activeCategory = computed<string | undefined>(
+    () => this.category() ?? this.categories.value()[0]?.category_id,
   );
-  protected readonly channels = resource({
-    params: () => this.activeCategory(),
-    loader: ({ params }) => this.api.liveStreams(params),
-  });
+  protected readonly channels = computed(() =>
+    this.activeCategory() === undefined
+      ? []
+      : inCategory(this.allChannels.value(), this.activeCategory()),
+  );
+  protected readonly loadingChannels = this.allChannels.isLoading;
+  protected readonly channelsError = this.allChannels.error;
 
   protected readonly timelineWidth = WINDOW_MINUTES * PX_PER_MINUTE;
   /** Starts at the previous half hour, minus 30 minutes of context, then shifted. */
@@ -99,9 +101,9 @@ export class GuidePage {
 
   protected readonly guide = resource({
     params: () =>
-      this.channels.hasValue()
+      this.channels().length
         ? {
-            channels: this.channels.value(),
+            channels: this.channels(),
             from: this.windowStart(),
             to: this.windowEnd(),
             version: this.tvGuide.version(),

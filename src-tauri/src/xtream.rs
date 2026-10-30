@@ -38,6 +38,18 @@ impl Credentials {
         url
     }
 
+    /// Names the account in cache paths: the same server and user share a
+    /// cache whatever the password. FNV-1a, so it is stable across builds.
+    pub fn cache_key(&self) -> String {
+        let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+        let input = format!("{}\n{}", self.base, self.username);
+        for byte in input.bytes() {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x0100_0000_01b3);
+        }
+        format!("{hash:016x}")
+    }
+
     /// The provider's full XMLTV guide.
     pub fn xmltv_url(&self) -> Url {
         let mut url = self.base.join("xmltv.php").expect("static path");
@@ -216,6 +228,21 @@ pub async fn call(
     action: Action,
     query: &Query,
 ) -> AppResult<Value> {
+    let text = fetch(http, creds, action, query).await?;
+    // Some panels answer an empty body instead of `[]` when a category is empty.
+    if text.trim().is_empty() {
+        return Ok(Value::Array(Vec::new()));
+    }
+    Ok(serde_json::from_str(&text)?)
+}
+
+/// The raw response body of an API call.
+pub async fn fetch(
+    http: &reqwest::Client,
+    creds: &Credentials,
+    action: Action,
+    query: &Query,
+) -> AppResult<String> {
     let mut url = creds.api_url();
     {
         let mut pairs = url.query_pairs_mut();
@@ -235,24 +262,28 @@ pub async fn call(
             pairs.append_pair("limit", &limit.to_string());
         }
     }
-    let text = http
+    Ok(http
         .get(url)
         .timeout(API_TIMEOUT)
         .send()
         .await?
         .error_for_status()?
         .text()
-        .await?;
-    // Some panels answer an empty body instead of `[]` when a category is empty.
-    if text.trim().is_empty() {
-        return Ok(Value::Array(Vec::new()));
-    }
-    Ok(serde_json::from_str(&text)?)
+        .await?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cache_key_ignores_the_password() {
+        let a = Credentials::new("tv.example.com", "alice", "one").unwrap();
+        let b = Credentials::new("http://tv.example.com/", "alice", "two").unwrap();
+        let c = Credentials::new("tv.example.com", "bob", "one").unwrap();
+        assert_eq!(a.cache_key(), b.cache_key());
+        assert_ne!(a.cache_key(), c.cache_key());
+    }
 
     #[test]
     fn normalizes_bare_host() {

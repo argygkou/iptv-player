@@ -98,7 +98,7 @@ export interface ExtraCategory {
   `,
 })
 export class CategoryList {
-  readonly categories = input.required<Category[]>();
+  readonly categories = input.required<readonly Category[]>();
   readonly extras = input<ExtraCategory[]>([]);
   readonly selected = input<string | null>(null);
   readonly selectedChange = output<string | null>();

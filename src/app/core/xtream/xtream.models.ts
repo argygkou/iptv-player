@@ -46,6 +46,24 @@ export interface SignedIn {
   profile: Profile | null;
 }
 
+/** The provider lists the backend caches per account. */
+export type CatalogueListName =
+  | 'live_categories'
+  | 'live_streams'
+  | 'vod_categories'
+  | 'vod_streams'
+  | 'series_categories'
+  | 'series';
+
+export interface CatalogueSnapshot<T> {
+  /** Unix seconds. */
+  updatedAt: number;
+  /** Older than the list's maximum age; worth a background refresh. */
+  stale: boolean;
+  /** `null` from a refresh that found the list unchanged. */
+  items: T[] | null;
+}
+
 export interface Category {
   category_id: string;
   category_name: string;
@@ -59,6 +77,8 @@ export interface LiveStream {
   stream_icon: string;
   epg_channel_id: string | null;
   category_id: string;
+  /** Newer panels list every category the item is in. */
+  category_ids?: number[];
   /** 1 when the panel records the channel for catch-up. */
   tv_archive: XtreamId;
   /** How many days back the recordings go. */

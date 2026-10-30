@@ -110,7 +110,7 @@ impl EpgStore {
         creds: &Credentials,
         refresh: bool,
     ) -> AppResult<Arc<Guide>> {
-        let key = cache_key(creds);
+        let key = creds.cache_key();
         let generation = self.generation.load(Ordering::SeqCst);
         if let Some(guide) = self.usable(&key, refresh)? {
             return Ok(guide);
@@ -195,7 +195,7 @@ impl EpgStore {
     /// Deletes the cached file of a removed profile.
     pub fn delete(&self, server: &str, username: &str) -> AppResult<()> {
         let creds = Credentials::new(server, username, "")?;
-        match fs::remove_file(self.path(&cache_key(&creds))) {
+        match fs::remove_file(self.path(&creds.cache_key())) {
             Err(err) if err.kind() != std::io::ErrorKind::NotFound => Err(err.into()),
             _ => Ok(()),
         }
@@ -220,16 +220,6 @@ async fn parse_in_background(path: PathBuf) -> AppResult<Channels> {
 
 /// Names the cache file after the account without putting its name on disk.
 /// FNV-1a, because it must stay the same across builds.
-fn cache_key(creds: &Credentials) -> String {
-    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    let input = format!("{}\n{}", creds.base, creds.username);
-    for byte in input.bytes() {
-        hash ^= u64::from(byte);
-        hash = hash.wrapping_mul(0x0100_0000_01b3);
-    }
-    format!("{hash:016x}")
-}
-
 fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -574,15 +564,6 @@ mod tests {
         assert!(guide.between("missing", 0, i64::MAX).is_empty());
     }
 
-    #[test]
-    fn cache_key_ignores_the_password() {
-        let a = Credentials::new("tv.example.com", "alice", "one").unwrap();
-        let b = Credentials::new("http://tv.example.com/", "alice", "two").unwrap();
-        let c = Credentials::new("tv.example.com", "bob", "one").unwrap();
-        assert_eq!(cache_key(&a), cache_key(&b));
-        assert_ne!(cache_key(&a), cache_key(&c));
-    }
-
     /// Serves an export from a fake panel, and keeps the cache when the panel
     /// later fails or answers with something that is not a guide.
     #[tokio::test]
@@ -618,7 +599,7 @@ mod tests {
 
         let guide = store.guide(&http, &creds, false).await.unwrap();
         assert_eq!(guide.channels["bbc1.uk"].len(), 2);
-        let path = store.path(&cache_key(&creds));
+        let path = store.path(&creds.cache_key());
         assert!(path.is_file());
 
         for failure in [1, 2] {

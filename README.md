@@ -28,7 +28,7 @@ Windows is the first target; Linux and iOS are planned (see [Roadmap](#roadmap))
 
 ```
 src/                         Angular app (standalone components, signals, resource())
-  app/core/xtream/           Typed models, XtreamApi facade over Tauri commands, EPG helpers
+  app/core/xtream/           Typed models, XtreamApi facade over Tauri commands, CatalogueStore, EPG helpers
   app/core/session/          SessionStore (signals) and the auth guard
   app/core/library/          LibraryStore: favourites, history and resume positions
   app/shared/player/         Video player: native (libmpv) with a webview fallback
@@ -39,6 +39,7 @@ src-tauri/                   Rust backend
   src/proxy.rs               Local stream relay on 127.0.0.1
   src/player/                libmpv binding and the native video window (Windows)
   src/library.rs             Per-profile favourites and watch history
+  src/catalogue.rs           Per-account cache of the category and stream lists
   src/epg.rs                 XMLTV guide download, cache and parser
   src/commands.rs            login / logout / xtream / stream_url / catchup_url / epg_guide / library commands
 ```
@@ -55,6 +56,12 @@ sign-in but stops auto sign-in; the ✕ on the sign-in screen deletes it and its
 directory, opened on sign-in; a one-off sign-in keeps them in memory only. The player saves the position of a
 movie or episode every 10 seconds and when it closes (mpv's `time-pos`, or the `<video>` element's
 `currentTime`), and reopens it with mpv's per-file `start` option. Near the end counts as watched.
+
+**Channel and catalogue cache.** The category and stream lists are kept byte for byte in
+`catalogue/<account hash>/<list>.json` in the app data directory, so the app shows them at once on launch.
+Xtream Codes has no way to ask what changed, so a list older than 6 hours (live) or 24 hours (movies and
+series) is shown anyway and downloaded again in the background; the UI only updates if the download differs.
+"Update list" on each page forces a download. Pages load each full list once and filter by category locally.
 
 **TV guide.** The backend downloads `xmltv.php` once (streamed to `epg/<account hash>.xml` in the app data
 directory, gzipped or not), parses it into memory, and answers the webview with just the programmes of the

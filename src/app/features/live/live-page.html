@@ -1,6 +1,6 @@
 <app-category-list
   [extras]="extras"
-  [categories]="categories.hasValue() ? categories.value() : []"
+  [categories]="categories.value()"
   [selected]="category() ?? null"
   (selectedChange)="selectCategory($event)"
 />
@@ -14,6 +14,7 @@
       (input)="search.set($any($event.target).value)"
     />
     <span class="count">{{ visibleStreams().length }}</span>
+    <app-catalogue-refresh [lists]="lists" />
   </div>
   <ul class="scroll">
     @if (streams.isLoading()) {
@@ -40,7 +41,7 @@
         </button>
       </li>
     } @empty {
-      @if (streams.hasValue() && category() === favouritesId && !search()) {
+      @if (!streams.isLoading() && category() === favouritesId && !search()) {
         <li class="status">Star a channel to add it here.</li>
       }
     }

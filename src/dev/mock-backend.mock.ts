@@ -266,22 +266,10 @@ const handlers: Record<string, (args: Args) => unknown> = {
     }),
   // Native playback needs libmpv in the desktop app; the mock uses the webview player.
   player_available: () => false,
+  catalogue_get: ({ list }) => catalogue(list),
+  catalogue_refresh: ({ list }) => ({ ...catalogue(list), items: null }),
   xtream: ({ action, query = {} }) => {
-    const byCategory = <T extends { category_id: string }>(list: T[]) =>
-      query.categoryId ? list.filter((item) => item.category_id === query.categoryId) : list;
     switch (action) {
-      case 'get_live_categories':
-        return liveCategories;
-      case 'get_vod_categories':
-        return movieCategories;
-      case 'get_series_categories':
-        return seriesCategories;
-      case 'get_live_streams':
-        return byCategory(liveStreams);
-      case 'get_vod_streams':
-        return byCategory(movies);
-      case 'get_series':
-        return byCategory(series);
       case 'get_short_epg':
         return epg(Number(query.streamId), query.limit ?? 4);
       case 'get_vod_info': {
@@ -324,6 +312,23 @@ const handlers: Record<string, (args: Args) => unknown> = {
     }
   },
 };
+
+/** Like the backend's cache: every list is fresh, and a refresh finds no change. */
+function catalogue(list: string) {
+  const lists: Record<string, unknown[]> = {
+    live_categories: liveCategories,
+    live_streams: liveStreams,
+    vod_categories: movieCategories,
+    vod_streams: movies,
+    series_categories: seriesCategories,
+    series,
+  };
+  const items = lists[list];
+  if (!items) {
+    throw `Mock backend: unknown list ${list}`;
+  }
+  return { updatedAt: seconds(), stale: false, items };
+}
 
 (window as any).__TAURI_INTERNALS__ = {
   transformCallback: () => 0,

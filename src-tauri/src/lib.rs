@@ -1,3 +1,4 @@
+mod catalogue;
 mod commands;
 mod epg;
 mod error;
@@ -49,6 +50,8 @@ pub fn run() {
             commands::remove_profile,
             commands::logout,
             commands::xtream,
+            commands::catalogue_get,
+            commands::catalogue_refresh,
             commands::stream_url,
             commands::catchup_url,
             commands::epg_guide,
