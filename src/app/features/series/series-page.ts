@@ -12,6 +12,7 @@ import { Router } from '@angular/router';
 import { LibraryStore } from '../../core/library/library-store';
 import { watchedFraction } from '../../core/library/library.models';
 import { XtreamApi } from '../../core/xtream/xtream-api';
+import { hiddenCategoryIds, withoutHidden } from '../../shared/category-groups';
 import { CategoryList } from '../../shared/category-list';
 import { PosterGrid, PosterItem } from '../../shared/poster-grid';
 import { CONTINUE, FAVOURITES, isSavedList } from '../../shared/saved-lists';
@@ -23,6 +24,7 @@ import { filterByName } from '../../shared/search';
   imports: [CategoryList, PosterGrid],
   template: `
     <app-category-list
+      kind="series"
       [extras]="extras"
       [categories]="categories.hasValue() ? categories.value() : []"
       [selected]="category() ?? null"
@@ -68,6 +70,15 @@ export class SeriesPage {
     params: () => (isSavedList(this.category()) ? undefined : { categoryId: this.category() }),
     loader: ({ params }) => this.api.series(params.categoryId),
   });
+  /** "All" leaves out the categories the user hid. */
+  private readonly listed = computed(() => {
+    const series = this.series.hasValue() ? this.series.value() : [];
+    if (this.category() !== undefined || !this.categories.hasValue()) {
+      return series;
+    }
+    const prefs = this.library.categoryPrefs('series');
+    return withoutHidden(series, hiddenCategoryIds(this.categories.value(), prefs));
+  });
   /** Favourite shows, or episodes to continue, when one of those lists is selected. */
   protected readonly saved = computed<PosterItem[] | null>(() => {
     switch (this.category()) {
@@ -97,7 +108,7 @@ export class SeriesPage {
   protected readonly items = computed<PosterItem[]>(
     () =>
       this.saved() ??
-      filterByName(this.series.hasValue() ? this.series.value() : [], this.search()).map((s) => ({
+      filterByName(this.listed(), this.search()).map((s) => ({
         id: String(s.series_id),
         name: s.name,
         image: s.cover,

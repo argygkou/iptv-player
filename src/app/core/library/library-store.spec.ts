@@ -28,7 +28,7 @@ describe('LibraryStore', () => {
   }
 
   it('tells favourites apart by kind', async () => {
-    const store = setup({ favourites: [{ ...channel, addedAt: 1 }], history: [] });
+    const store = setup({ favourites: [{ ...channel, addedAt: 1 }], history: [], categories: {} });
     await store.load();
 
     expect(store.isFavourite('live', '7')).toBe(true);
@@ -47,6 +47,7 @@ describe('LibraryStore', () => {
         watched({ ...movie, id: '8' }, 5950, 6000),
         watched({ ...movie, id: '9' }, 10, 6000),
       ],
+      categories: {},
     });
     await store.load();
 
@@ -56,20 +57,20 @@ describe('LibraryStore', () => {
 
   it('drops replies meant for the previous account', async () => {
     let resolve!: (library: Library) => void;
-    const store = setup({ favourites: [], history: [] });
+    const store = setup({ favourites: [], history: [], categories: {} });
     api['record'].mockReturnValue(new Promise<Library>((r) => (resolve = r)));
     await store.load();
 
     const pending = store.record(movie);
     store.clear();
-    resolve({ favourites: [{ ...movie, addedAt: 1 }], history: [] });
+    resolve({ favourites: [{ ...movie, addedAt: 1 }], history: [], categories: {} });
     await pending;
 
     expect(store.favourites()).toEqual([]);
   });
 
   it('keeps working when the backend fails', async () => {
-    const store = setup({ favourites: [], history: [] });
+    const store = setup({ favourites: [], history: [], categories: {} });
     api['get'].mockRejectedValue('Not signed in');
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 

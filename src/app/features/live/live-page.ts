@@ -29,6 +29,7 @@ import {
 import { TvGuide } from '../../core/xtream/tv-guide';
 import { XtreamApi } from '../../core/xtream/xtream-api';
 import { LiveStream, Programme } from '../../core/xtream/xtream.models';
+import { hiddenCategoryIds, withoutHidden } from '../../shared/category-groups';
 import { CategoryList } from '../../shared/category-list';
 import { FavouriteButton } from '../../shared/favourite-button';
 import { Clock } from '../../shared/clock';
@@ -84,6 +85,11 @@ export class LivePage {
     }
     if (category === RECENT.id) {
       return pick(streams, this.library.recentChannels());
+    }
+    if (category === undefined && this.categories.hasValue()) {
+      // "All" leaves out the categories the user hid.
+      const prefs = this.library.categoryPrefs('live');
+      return withoutHidden(streams, hiddenCategoryIds(this.categories.value(), prefs));
     }
     return streams;
   });

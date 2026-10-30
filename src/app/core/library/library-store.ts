@@ -1,13 +1,16 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
 
+import { StreamKind } from '../xtream/xtream.models';
 import { LibraryApi } from './library-api';
 import {
+  CategoryPrefs,
   EMPTY_LIBRARY,
   Favourite,
   Library,
   LibraryItem,
   LibraryKind,
   libraryKey,
+  NO_CATEGORY_PREFS,
   Progress,
   resumePosition,
   Watched,
@@ -51,6 +54,19 @@ export class LibraryStore {
 
   watched(kind: LibraryKind, id: string): Watched | undefined {
     return this.watchedByKey().get(libraryKey(kind, id));
+  }
+
+  categoryPrefs(catalogue: StreamKind): CategoryPrefs {
+    return this.data().categories[catalogue] ?? NO_CATEGORY_PREFS;
+  }
+
+  /** Shown at once; the backend's reply (or a reload) settles it. */
+  setCategoryPrefs(catalogue: StreamKind, prefs: CategoryPrefs): Promise<void> {
+    this.data.update((library) => ({
+      ...library,
+      categories: { ...library.categories, [catalogue]: prefs },
+    }));
+    return this.apply(this.session, this.api.setCategories(catalogue, prefs));
   }
 
   async load(): Promise<void> {

@@ -56,6 +56,7 @@ pub fn run() {
             commands::library_set_favourite,
             commands::library_record,
             commands::library_forget,
+            commands::library_set_categories,
             player::player_progress,
             player::player_available,
             player::player_open,
