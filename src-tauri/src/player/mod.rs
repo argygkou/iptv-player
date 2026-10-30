@@ -158,7 +158,7 @@ impl Native {
                 // the bottom half, and keep it up a little longer than mpv does.
                 (
                     "script-opts",
-                    "osc-windowcontrols=no,osc-deadzonesize=0,osc-hidetimeout=2000",
+                    "osc-windowcontrols=no,osc-deadzonesize=0,osc-hidetimeout=2500",
                 ),
                 ("input-default-bindings", "yes"),
                 ("input-vo-keyboard", "yes"),

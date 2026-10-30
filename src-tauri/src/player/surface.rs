@@ -14,9 +14,9 @@ use windows_sys::Win32::Graphics::Gdi::{
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CS_DBLCLKS, CreateWindowExW, DefWindowProcW, HWND_TOP, RegisterClassW, SW_HIDE, SWP_NOACTIVATE,
-    SWP_SHOWWINDOW, SetWindowPos, ShowWindow, WM_CREATE, WM_PARENTNOTIFY, WNDCLASSW, WS_CHILD,
-    WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+    CS_DBLCLKS, CreateWindowExW, DefWindowProcW, GW_CHILD, GetWindow, HWND_TOP, RegisterClassW,
+    SW_HIDE, SWP_NOACTIVATE, SWP_SHOWWINDOW, SetWindowPos, ShowWindow, WM_MOUSEMOVE, WNDCLASSW,
+    WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
 };
 
 use super::Bounds;
@@ -28,18 +28,22 @@ fn wide(value: &str) -> Vec<u16> {
 }
 
 /// Embedded mpv creates its video window disabled, expecting the host to
-/// forward input. Re-enabling it as soon as it appears lets mouse and keyboard
-/// reach mpv directly, so its on-screen controller and shortcuts work.
+/// forward input, so mouse moves land here instead. The first one re-enables
+/// mpv's window; from then on mouse and keyboard reach mpv directly and its
+/// on-screen controller and shortcuts work.
 unsafe extern "system" fn window_proc(
     hwnd: HWND,
     message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
-    // SAFETY: for WM_PARENTNOTIFY/WM_CREATE, lparam is the new child window.
+    // SAFETY: plain Win32 calls on this window and its child.
     unsafe {
-        if message == WM_PARENTNOTIFY && (wparam & 0xffff) as u32 == WM_CREATE {
-            EnableWindow(lparam as HWND, 1);
+        if message == WM_MOUSEMOVE {
+            let child = GetWindow(hwnd, GW_CHILD);
+            if !child.is_null() {
+                EnableWindow(child, 1);
+            }
         }
         DefWindowProcW(hwnd, message, wparam, lparam)
     }
