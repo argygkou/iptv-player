@@ -12,7 +12,15 @@
 // and reading its hash from the output or from src-tauri/lib/<name>.json.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,13 +53,18 @@ const PACKAGES = [
     repo: 'tomasklaen/uosc',
     asset: /^uosc\.zip$/,
     release: '5.13.0',
-    sha256: null,
+    sha256: '4be9da3289285300fa374496c3f1bfd7bb20ac08e890d25bd5a06b28eebe4882',
     installed: join(TAURI, 'mpv', 'scripts', 'uosc', 'main.lua'),
     // The zip holds scripts/ and fonts/, laid out like an mpv config directory.
     extract: (archive) => {
       execFileSync(sevenZip.path7za, ['x', archive, `-o${join(TAURI, 'mpv')}`, '-y'], {
         stdio: 'ignore',
       });
+      // Its helper ships for every platform; the Windows bundle needs only its own.
+      const bin = join(TAURI, 'mpv', 'scripts', 'uosc', 'bin');
+      for (const file of readdirSync(bin).filter((f) => !f.endsWith('.exe'))) {
+        rmSync(join(bin, file), { force: true });
+      }
     },
   },
 ];
