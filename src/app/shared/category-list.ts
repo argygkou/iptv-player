@@ -69,24 +69,12 @@ interface ShownGroup extends CategoryGroup {
       (input)="filter.set($any($event.target).value)"
     />
     <ul>
-      <li>
-        <button
-          type="button"
-          class="pick"
-          [class.active]="selected() === null"
-          (click)="selectedChange.emit(null)"
-        >
-          All
-        </button>
+      <li class="row" [class.active]="selected() === null">
+        <button type="button" class="pick" (click)="selectedChange.emit(null)">All</button>
       </li>
       @for (extra of extras(); track extra.id) {
-        <li>
-          <button
-            type="button"
-            class="pick"
-            [class.active]="selected() === extra.id"
-            (click)="selectedChange.emit(extra.id)"
-          >
+        <li class="row" [class.active]="selected() === extra.id">
+          <button type="button" class="pick" (click)="selectedChange.emit(extra.id)">
             {{ extra.label }}
           </button>
         </li>
@@ -159,6 +147,7 @@ interface ShownGroup extends CategoryGroup {
     <ng-template #row let-entry let-nested="nested">
       <li
         class="row"
+        [class.active]="selected() === entry.category.category_id"
         [class.nested]="nested"
         [class.hidden]="isHidden(entry.category)"
         [class.pinned]="isPinned(entry.category)"
@@ -166,7 +155,6 @@ interface ShownGroup extends CategoryGroup {
         <button
           type="button"
           class="pick"
-          [class.active]="selected() === entry.category.category_id"
           [title]="entry.category.category_name"
           (click)="selectedChange.emit(entry.category.category_id)"
         >
@@ -233,21 +221,13 @@ interface ShownGroup extends CategoryGroup {
     }
     .pick {
       display: flex;
+      flex: 1;
       align-items: center;
       gap: 0.4rem;
-      width: 100%;
       min-width: 0;
       padding: 0.5rem 0.75rem;
-      border-radius: var(--radius);
+      color: inherit;
       text-align: left;
-    }
-    .pick:hover {
-      background: var(--surface-hover);
-      color: var(--text);
-    }
-    .pick.active {
-      background: var(--accent-soft);
-      color: var(--text);
     }
     .label {
       flex: 1;
@@ -256,10 +236,20 @@ interface ShownGroup extends CategoryGroup {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    /* The whole row highlights, its actions included. */
     .row {
-      position: relative;
       display: flex;
       align-items: center;
+      border-radius: var(--radius);
+      color: var(--text-muted);
+    }
+    .row:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+    .row.active {
+      background: var(--accent-soft);
+      color: var(--text);
     }
     .row.nested .pick {
       padding-left: 1.9rem;
@@ -268,9 +258,14 @@ interface ShownGroup extends CategoryGroup {
       opacity: 0.45;
       text-decoration: line-through;
     }
-    .group .pick {
+    .group {
       color: var(--text);
+    }
+    .group .label {
+      font-size: 0.8rem;
       font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
     .chevron {
       display: inline-block;
@@ -286,17 +281,16 @@ interface ShownGroup extends CategoryGroup {
       font-weight: 400;
     }
     .actions {
-      position: absolute;
-      right: 0.25rem;
       display: none;
       gap: 0.1rem;
-      padding-left: 0.5rem;
-      border-radius: var(--radius);
-      background: var(--surface-hover);
+      padding-right: 0.25rem;
     }
     .row:hover .actions,
     .row:focus-within .actions {
       display: flex;
+    }
+    .row:hover:has(.actions) .count {
+      display: none;
     }
     .action {
       display: grid;
@@ -306,7 +300,7 @@ interface ShownGroup extends CategoryGroup {
       border-radius: var(--radius);
     }
     .action:hover {
-      color: var(--text);
+      color: var(--accent);
     }
     .action.pin[aria-pressed='true'] {
       color: var(--accent);

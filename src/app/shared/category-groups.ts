@@ -13,6 +13,125 @@ const PREFIX_PATTERNS = [
   /^\s*([A-Za-z]{2,4})\s+[-–—»►➾•]\s+(.+)$/,
 ];
 
+/** Codes IPTV providers use that are not, or mean more than, a country. */
+const REGION_NAMES: Record<string, string> = {
+  AR: 'Arabic',
+  ARA: 'Arabic',
+  AF: 'Africa',
+  AFR: 'Africa',
+  EN: 'English',
+  ENG: 'English',
+  EXYU: 'Ex-Yugoslavia',
+  'EX-YU': 'Ex-Yugoslavia',
+  LAT: 'Latin America',
+  LATAM: 'Latin America',
+  LATINO: 'Latin America',
+  KU: 'Kurdish',
+  KURD: 'Kurdish',
+  ASIA: 'Asia',
+  CARIB: 'Caribbean',
+  NORDIC: 'Nordic',
+  KSA: 'Saudi Arabia',
+  UAE: 'United Arab Emirates',
+};
+
+/** Three-letter codes, ISO and sports-style, to the two-letter ones `Intl` names. */
+const ALPHA3: Record<string, string> = {
+  USA: 'US',
+  CAN: 'CA',
+  MEX: 'MX',
+  BRA: 'BR',
+  ARG: 'AR',
+  AUS: 'AU',
+  NZL: 'NZ',
+  GBR: 'GB',
+  IRL: 'IE',
+  GER: 'DE',
+  DEU: 'DE',
+  FRA: 'FR',
+  ITA: 'IT',
+  ESP: 'ES',
+  SPA: 'ES',
+  POR: 'PT',
+  PRT: 'PT',
+  NED: 'NL',
+  NLD: 'NL',
+  BEL: 'BE',
+  SUI: 'CH',
+  CHE: 'CH',
+  AUT: 'AT',
+  SWE: 'SE',
+  NOR: 'NO',
+  DEN: 'DK',
+  DNK: 'DK',
+  FIN: 'FI',
+  ISL: 'IS',
+  POL: 'PL',
+  CZE: 'CZ',
+  SVK: 'SK',
+  HUN: 'HU',
+  ROM: 'RO',
+  ROU: 'RO',
+  BUL: 'BG',
+  BGR: 'BG',
+  GRE: 'GR',
+  GRC: 'GR',
+  CYP: 'CY',
+  TUR: 'TR',
+  ALB: 'AL',
+  SRB: 'RS',
+  CRO: 'HR',
+  HRV: 'HR',
+  BIH: 'BA',
+  MKD: 'MK',
+  SLO: 'SI',
+  SVN: 'SI',
+  MNE: 'ME',
+  RUS: 'RU',
+  UKR: 'UA',
+  ISR: 'IL',
+  IRN: 'IR',
+  IRQ: 'IQ',
+  EGY: 'EG',
+  MAR: 'MA',
+  ALG: 'DZ',
+  DZA: 'DZ',
+  TUN: 'TN',
+  SAU: 'SA',
+  ARE: 'AE',
+  IND: 'IN',
+  PAK: 'PK',
+  BAN: 'BD',
+  BGD: 'BD',
+  CHN: 'CN',
+  JPN: 'JP',
+  KOR: 'KR',
+  PHI: 'PH',
+  PHL: 'PH',
+  THA: 'TH',
+  VIE: 'VN',
+  VNM: 'VN',
+  IDN: 'ID',
+  MAS: 'MY',
+  MYS: 'MY',
+};
+
+const regions = new Intl.DisplayNames(['en'], { type: 'region', fallback: 'none' });
+
+/** "GR" → "Greece", "UK" → "United Kingdom"; anything else is kept as written. */
+export function groupName(prefix: string): string {
+  const code = prefix.trim().toUpperCase();
+  if (REGION_NAMES[code]) {
+    return REGION_NAMES[code];
+  }
+  const alpha2 = /^[A-Z]{2}$/.test(code) ? code : ALPHA3[code];
+  try {
+    return (alpha2 && regions.of(alpha2)) || prefix.trim();
+  } catch {
+    return prefix.trim();
+  }
+}
+
 /** A category under its group, labelled without the group's prefix. */
 export interface GroupedCategory {
   category: Category;
@@ -22,7 +141,7 @@ export interface GroupedCategory {
 export interface CategoryGroup {
   /** Upper-cased prefix; `null` for the categories without a shared prefix. */
   key: string | null;
-  /** The prefix as the provider first wrote it. */
+  /** The country the prefix stands for, or the prefix as the provider first wrote it. */
   name: string;
   categories: GroupedCategory[];
 }
@@ -38,7 +157,7 @@ function split(name: string): Split | null {
     const match = pattern.exec(name);
     const prefix = match?.[1].trim();
     if (match && prefix) {
-      return { key: groupKey(prefix), name: prefix, rest: match[2].trim() };
+      return { key: groupKey(prefix), name: groupName(prefix), rest: match[2].trim() };
     }
   }
   return null;

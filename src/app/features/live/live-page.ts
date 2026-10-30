@@ -7,6 +7,7 @@ import {
   ElementRef,
   inject,
   input,
+  linkedSignal,
   LOCALE_ID,
   resource,
   signal,
@@ -33,6 +34,7 @@ import { hiddenCategoryIds, withoutHidden } from '../../shared/category-groups';
 import { CategoryList } from '../../shared/category-list';
 import { FavouriteButton } from '../../shared/favourite-button';
 import { Clock } from '../../shared/clock';
+import { InView } from '../../shared/in-view';
 import { FAVOURITES, isSavedList, RECENT } from '../../shared/saved-lists';
 import { filterByName } from '../../shared/search';
 import { NativePlayback, PlayerInfo } from '../../shared/player/native-playback';
@@ -42,11 +44,13 @@ const HOUR = 60 * 60 * 1000;
 /** How far back the programme list goes on a channel with catch-up. */
 const CATCHUP_LIST_HOURS = 24;
 const UPCOMING_HOURS = 12;
+/** Channels rendered at a time; more are added on scroll. */
+const CHANNEL_PAGE = 200;
 
 @Component({
   selector: 'app-live-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CategoryList, FavouriteButton, VideoPlayer, DatePipe],
+  imports: [CategoryList, FavouriteButton, InView, VideoPlayer, DatePipe],
   templateUrl: './live-page.html',
   styleUrls: ['../../shared/catalogue-layout.scss', './live-page.scss'],
 })
@@ -94,6 +98,18 @@ export class LivePage {
     return streams;
   });
   protected readonly visibleStreams = computed(() => filterByName(this.listed(), this.search()));
+  /**
+   * Providers have tens of thousands of channels; rendering them all makes
+   * every change detection pass on this page slow.
+   */
+  protected readonly channelLimit = linkedSignal({
+    source: this.visibleStreams,
+    computation: () => CHANNEL_PAGE,
+  });
+  protected readonly shownStreams = computed(() =>
+    this.visibleStreams().slice(0, this.channelLimit()),
+  );
+  protected readonly channelPage = CHANNEL_PAGE;
   /** Every channel, so the one playing stays known while another category is browsed. */
   private readonly allStreams = resource({
     params: () => this.channel(),

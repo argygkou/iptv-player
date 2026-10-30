@@ -3,6 +3,7 @@ import { Category } from '../core/xtream/xtream.models';
 import {
   categoryGroupKey,
   groupCategories,
+  groupName,
   hiddenCategoryIds,
   withoutHidden,
 } from './category-groups';
@@ -31,6 +32,19 @@ describe('categoryGroupKey', () => {
   });
 });
 
+describe('groupName', () => {
+  it('spells out country codes and keeps other prefixes', () => {
+    expect(groupName('GR')).toBe('Greece');
+    expect(groupName('uk')).toBe('United Kingdom');
+    expect(groupName('GER')).toBe('Germany');
+    expect(groupName('AR')).toBe('Arabic');
+    expect(groupName('EX-YU')).toBe('Ex-Yugoslavia');
+    expect(groupName('Greece')).toBe('Greece');
+    expect(groupName('4K')).toBe('4K');
+    expect(groupName('XX')).toBe('XX');
+  });
+});
+
 describe('groupCategories', () => {
   it('groups shared prefixes in provider order and puts the rest last', () => {
     const groups = groupCategories([
@@ -42,8 +56,8 @@ describe('groupCategories', () => {
       category('6', 'DE: Sport'),
     ]);
     expect(groups.map((g) => [g.key, g.name, g.categories.map((c) => c.label)])).toEqual([
-      ['UK', 'UK', ['Sports', 'News']],
-      ['DE', 'DE', ['Kinder', 'Sport']],
+      ['UK', 'United Kingdom', ['Sports', 'News']],
+      ['DE', 'Germany', ['Kinder', 'Sport']],
       [null, 'Other', ['Documentaries', 'FR | Only one']],
     ]);
   });
