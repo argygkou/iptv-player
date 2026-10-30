@@ -60,7 +60,8 @@ export class UpdateStore {
     try {
       const update = await this.api.check();
       this.update.set(update);
-      this.state.set(update ? 'available' : 'upToDate');
+      // "You're up to date" only answers a check the user asked for.
+      this.state.set(update ? 'available' : manual ? 'upToDate' : 'idle');
     } catch (error) {
       console.warn('Update check failed', error);
       this.error.set(manual ? String(error) : null);

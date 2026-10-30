@@ -50,6 +50,14 @@ describe('UpdateStore', () => {
     expect(store.showBanner()).toBe(false);
   });
 
+  it('says nothing after a background check finds no update', async () => {
+    const store = setup();
+
+    await store.check();
+
+    expect(store.state()).toBe('idle');
+  });
+
   it('shows the banner for a newer release until dismissed', async () => {
     const store = setup();
     api['check'].mockResolvedValue(fakeUpdate('0.2.0'));
