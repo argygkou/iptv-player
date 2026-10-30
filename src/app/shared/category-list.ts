@@ -286,7 +286,7 @@ interface ShownGroup extends CategoryGroup {
       padding-right: 0.25rem;
     }
     .row:hover .actions,
-    .row:focus-within .actions {
+    .row:has(:focus-visible) .actions {
       display: flex;
     }
     .row:hover:has(.actions) .count {
