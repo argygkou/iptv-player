@@ -142,6 +142,13 @@ Never bump a version by hand.
    version and updates `CHANGELOG.md`.
 3. Merging the release PR tags `vX.Y.Z`, publishes a GitHub Release and builds the Windows NSIS installer into it.
 
+Installed copies update themselves: the app checks
+`https://github.com/argygkou/iptv-player/releases/latest/download/latest.json` shortly after startup and every
+6 hours, and offers **Update and restart** in the sidebar. Updates are signed with the Tauri updater key; the
+public key is in `tauri.conf.json`, the private key and its password are the `TAURI_SIGNING_PRIVATE_KEY` and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` repository secrets. Losing that key means installed copies can no longer
+update.
+
 To try an installer from a branch without releasing, run the **Release** workflow manually from the Actions tab;
 the installer is attached to the run as an artifact.
 
@@ -166,5 +173,5 @@ installer with a code-signing certificate. See the
 
 ## Roadmap
 
-1. Microsoft Store submission and auto-updates for the direct download.
+1. Microsoft Store submission.
 2. Linux packages (`.deb`, AppImage) with native playback, then iOS through Tauri's mobile target.

@@ -24,6 +24,46 @@
         >
       </div>
     }
+    @if (updates.showBanner()) {
+      <div class="update" role="status">
+        <strong>Version {{ updates.update()?.version }} is available</strong>
+        @if (updates.state() === 'downloading') {
+          <span
+            >Downloading{{
+              updates.progress() === null ? '…' : ' ' + (updates.progress() | percent)
+            }}</span
+          >
+        } @else {
+          <div class="actions">
+            <button type="button" class="primary" (click)="updates.install()">
+              Update and restart
+            </button>
+            <button type="button" (click)="updates.dismiss()">Later</button>
+          </div>
+        }
+      </div>
+    }
+    <div class="version">
+      @if (updates.currentVersion(); as version) {
+        <span>Version {{ version }}</span>
+      }
+      <button
+        type="button"
+        class="link"
+        [disabled]="updates.state() === 'checking' || updates.state() === 'downloading'"
+        (click)="updates.check(true)"
+      >
+        {{ updates.state() === 'checking' ? 'Checking…' : 'Check for updates' }}
+      </button>
+      @switch (updates.state()) {
+        @case ('upToDate') {
+          <span>You're up to date</span>
+        }
+        @case ('error') {
+          <span class="error" [title]="updates.error()">Update failed</span>
+        }
+      }
+    </div>
     <button type="button" (click)="signOut()">Sign out</button>
   </footer>
 </nav>
