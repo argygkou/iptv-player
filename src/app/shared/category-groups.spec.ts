@@ -42,6 +42,8 @@ describe('groupName', () => {
     expect(groupName('Greece')).toBe('Greece');
     expect(groupName('4K')).toBe('4K');
     expect(groupName('XX')).toBe('XX');
+    expect(groupName('TV')).toBe('TV');
+    expect(groupName('SD')).toBe('SD');
   });
 });
 

@@ -15,6 +15,7 @@ import { LibraryStore } from '../core/library/library-store';
 import { CategoryPrefs } from '../core/library/library.models';
 import { Category, StreamKind } from '../core/xtream/xtream.models';
 import {
+  categoryGroupKey,
   CategoryGroup,
   groupCategories,
   GroupedCategory,
@@ -462,19 +463,20 @@ export class CategoryList {
       this.save({ hidden: [...prefs.hidden, id] });
       return;
     }
-    const group = this.grouped().find(
-      (g) => g.key !== null && g.categories.some((entry) => entry.category === category),
-    );
-    if (group?.key && prefs.hiddenGroups.includes(group.key)) {
-      const others = group.categories
-        .map((entry) => entry.category.category_id)
-        .filter((other) => other !== id && !prefs.hidden.includes(other));
+    const hidden = prefs.hidden.filter((h) => h !== id);
+    // By the category's own key: its group may since have shrunk into "Other".
+    const key = categoryGroupKey(category);
+    if (key !== null && prefs.hiddenGroups.includes(key)) {
+      const others = this.categories()
+        .filter((c) => c.category_id !== id && categoryGroupKey(c) === key)
+        .map((c) => c.category_id)
+        .filter((other) => !hidden.includes(other));
       this.save({
-        hidden: [...prefs.hidden, ...others],
-        hiddenGroups: prefs.hiddenGroups.filter((key) => key !== group.key),
+        hidden: [...hidden, ...others],
+        hiddenGroups: prefs.hiddenGroups.filter((k) => k !== key),
       });
     } else {
-      this.save({ hidden: prefs.hidden.filter((h) => h !== id) });
+      this.save({ hidden });
     }
   }
 

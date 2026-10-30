@@ -69,6 +69,44 @@ describe('LibraryStore', () => {
     expect(store.favourites()).toEqual([]);
   });
 
+  it('keeps a category save on screen while earlier replies arrive', async () => {
+    const empty: Library = { favourites: [], history: [], categories: {} };
+    const store = setup(empty);
+    await store.load();
+    const prefs = { pinned: ['3'], hidden: [], hiddenGroups: [] };
+    let resolveRecord!: (library: Library) => void;
+    api['record'].mockReturnValue(new Promise<Library>((r) => (resolveRecord = r)));
+    api['setCategories'] = vi.fn().mockResolvedValue({ ...empty, categories: { live: prefs } });
+
+    const recording = store.record(channel);
+    const saving = store.setCategoryPrefs('live', prefs);
+    // The history reply was made before the save, so it has no categories.
+    resolveRecord({ ...empty, history: [watched(channel, 0, 0)] });
+    await recording;
+    expect(store.categoryPrefs('live')).toEqual(prefs);
+
+    await saving;
+    expect(api['setCategories']).toHaveBeenCalledAfter(api['record']);
+    expect(store.categoryPrefs('live')).toEqual(prefs);
+    expect(store.recentChannels().length).toBe(0);
+  });
+
+  it('gives the same category prefs while only the history changes', async () => {
+    const prefs = { pinned: [], hidden: ['1'], hiddenGroups: [] };
+    const store = setup({ favourites: [], history: [], categories: { live: prefs } });
+    await store.load();
+    const before = store.categoryPrefs('live');
+    api['record'].mockResolvedValue({
+      favourites: [],
+      history: [watched(channel, 0, 0)],
+      categories: { live: { ...prefs } },
+    });
+    await store.record(channel);
+
+    expect(store.recentChannels().length).toBe(1);
+    expect(store.categoryPrefs('live')).toBe(before);
+  });
+
   it('keeps working when the backend fails', async () => {
     const store = setup({ favourites: [], history: [], categories: {} });
     api['get'].mockRejectedValue('Not signed in');

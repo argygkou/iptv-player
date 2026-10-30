@@ -116,6 +116,9 @@ const ALPHA3: Record<string, string> = {
   MYS: 'MY',
 };
 
+/** Two-letter prefixes that are ISO codes but almost never mean the country in IPTV lists. */
+const NOT_COUNTRIES = new Set(['TV', 'SD', 'FM', 'PM']);
+
 const regions = new Intl.DisplayNames(['en'], { type: 'region', fallback: 'none' });
 
 /** "GR" → "Greece", "UK" → "United Kingdom"; anything else is kept as written. */
@@ -124,7 +127,7 @@ export function groupName(prefix: string): string {
   if (REGION_NAMES[code]) {
     return REGION_NAMES[code];
   }
-  const alpha2 = /^[A-Z]{2}$/.test(code) ? code : ALPHA3[code];
+  const alpha2 = /^[A-Z]{2}$/.test(code) && !NOT_COUNTRIES.has(code) ? code : ALPHA3[code];
   try {
     return (alpha2 && regions.of(alpha2)) || prefix.trim();
   } catch {

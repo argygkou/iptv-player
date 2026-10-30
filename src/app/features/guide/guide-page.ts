@@ -14,7 +14,7 @@ import { LibraryStore } from '../../core/library/library-store';
 import { canCatchUp, isAiring } from '../../core/xtream/epg';
 import { TvGuide } from '../../core/xtream/tv-guide';
 import { XtreamApi } from '../../core/xtream/xtream-api';
-import { LiveStream, Programme } from '../../core/xtream/xtream.models';
+import { Category, LiveStream, Programme } from '../../core/xtream/xtream.models';
 import { groupCategories, isCategoryHidden } from '../../shared/category-groups';
 import { Clock } from '../../shared/clock';
 
@@ -78,13 +78,17 @@ export class GuidePage {
   /** The live categories as the sidebar arranges them: pinned first, grouped, none hidden. */
   protected readonly categoryMenu = computed(() => {
     const prefs = this.library.categoryPrefs('live');
-    const visible = (this.categories.hasValue() ? this.categories.value() : []).filter(
-      (c) => !isCategoryHidden(c, prefs),
-    );
-    const byId = new Map(visible.map((c) => [c.category_id, c]));
+    const all = this.categories.hasValue() ? this.categories.value() : [];
+    // The category opened from a link stays listed even if hidden, so the menu matches.
+    const shown = (c: Category) => !isCategoryHidden(c, prefs) || c.category_id === this.category();
+    const byId = new Map(all.filter(shown).map((c) => [c.category_id, c]));
     return {
       pinned: prefs.pinned.flatMap((id) => byId.get(id) ?? []),
-      groups: groupCategories(visible),
+      // Grouped before filtering, so the groups match the sidebar's.
+      groups: groupCategories(all).flatMap((group) => {
+        const categories = group.categories.filter((entry) => shown(entry.category));
+        return categories.length ? [{ ...group, categories }] : [];
+      }),
     };
   });
   protected readonly activeCategory = computed<string | undefined>(() => {
