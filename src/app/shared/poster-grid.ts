@@ -8,6 +8,9 @@ export interface PosterItem {
   name: string;
   image: string;
   link: unknown[];
+  queryParams?: Record<string, string>;
+  /** How much was watched, 0 to 1. */
+  progress?: number | null;
 }
 
 const PAGE_SIZE = 120;
@@ -23,14 +26,20 @@ const PAGE_SIZE = 120;
         <a
           class="poster"
           [routerLink]="item.link"
-          queryParamsHandling="preserve"
+          [queryParams]="item.queryParams"
+          [queryParamsHandling]="item.queryParams ? '' : 'preserve'"
           [title]="item.name"
         >
-          @if (item.image) {
-            <img [src]="item.image" [alt]="item.name" loading="lazy" />
-          } @else {
-            <div class="placeholder">{{ item.name }}</div>
-          }
+          <div class="art">
+            @if (item.image) {
+              <img [src]="item.image" [alt]="item.name" loading="lazy" />
+            } @else {
+              <div class="placeholder">{{ item.name }}</div>
+            }
+            @if (item.progress; as progress) {
+              <div class="progress" [style.width.%]="progress * 100"></div>
+            }
+          </div>
           <span>{{ item.name }}</span>
         </a>
       } @empty {
@@ -59,14 +68,25 @@ const PAGE_SIZE = 120;
       text-decoration: none;
       font-size: 0.85rem;
     }
+    .art {
+      position: relative;
+      overflow: hidden;
+      border-radius: var(--radius);
+      transition: transform 0.15s ease;
+    }
+    .progress {
+      position: absolute;
+      inset: auto auto 0 0;
+      height: 4px;
+      background: var(--accent);
+    }
     img,
     .placeholder {
       width: 100%;
       aspect-ratio: 2 / 3;
       object-fit: cover;
-      border-radius: var(--radius);
+      display: block;
       background: var(--surface);
-      transition: transform 0.15s ease;
     }
     .placeholder {
       display: grid;
@@ -75,8 +95,7 @@ const PAGE_SIZE = 120;
       text-align: center;
       color: var(--text-muted);
     }
-    .poster:hover img,
-    .poster:hover .placeholder {
+    .poster:hover .art {
       transform: scale(1.03);
       outline: 2px solid var(--accent);
     }

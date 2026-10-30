@@ -87,6 +87,28 @@ pub struct Media {
     /// Chosen by the webview, which uses it to match errors to this call.
     pub generation: u64,
     pub live: bool,
+    /// Seconds to start from, to resume a movie or episode.
+    #[serde(default)]
+    pub start: Option<f64>,
+}
+
+/// How far into the current file playback is, in seconds.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct Progress {
+    pub position: f64,
+    /// `None` for live streams and files of unknown length.
+    pub duration: Option<f64>,
+}
+
+/// `loadfile` arguments for `url`, starting `start` seconds in when given.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn loadfile(url: &str, start: Option<f64>) -> Vec<String> {
+    let mut args = vec!["loadfile".to_owned(), url.to_owned(), "replace".to_owned()];
+    if let Some(start) = start.filter(|s| s.is_finite() && *s > 0.0) {
+        // Per-file options follow the playlist index, which `replace` ignores.
+        args.extend(["-1".to_owned(), format!("start={start:.1}")]);
+    }
+    args
 }
 
 /// One `player_open` call: the id the webview gave it, and whether it is live.
@@ -361,6 +383,7 @@ pub async fn player_open(
         url,
         generation,
         live,
+        start,
     } = media;
     check_url(&state, &url)?;
     let library = player.library.as_deref().ok_or_else(unavailable)?;
@@ -376,7 +399,9 @@ pub async fn player_open(
         .set_property("keep-open", if live { "no" } else { "yes" })
         .map_err(AppError::Playback)?;
     native.tracker.queued(Entry { generation, live });
-    if let Err(err) = native.mpv.command(&["loadfile", &url, "replace"]) {
+    let args = loadfile(&url, start);
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    if let Err(err) = native.mpv.command(&args) {
         native.tracker.rejected();
         return Err(AppError::Playback(err));
     }
@@ -393,6 +418,24 @@ pub async fn player_set_bounds(player: State<'_, Player>, bounds: Bounds) -> App
         native.surface.place(&bounds);
     }
     Ok(())
+}
+
+/// Where the current file is; `None` when nothing is loaded.
+#[cfg(windows)]
+#[tauri::command]
+pub async fn player_progress(player: State<'_, Player>) -> AppResult<Option<Progress>> {
+    let Some(native) = player.native.get() else {
+        return Ok(None);
+    };
+    let Ok(position) = native.mpv.get_double("time-pos") else {
+        return Ok(None);
+    };
+    let duration = native
+        .mpv
+        .get_double("duration")
+        .ok()
+        .filter(|d| d.is_finite() && *d > 0.0);
+    Ok(Some(Progress { position, duration }))
 }
 
 #[cfg(windows)]
@@ -427,6 +470,12 @@ pub fn player_open(
 #[tauri::command]
 pub fn player_set_bounds(_player: State<'_, Player>, _bounds: Bounds) -> AppResult<()> {
     Err(unavailable())
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub fn player_progress(_player: State<'_, Player>) -> AppResult<Option<Progress>> {
+    Ok(None)
 }
 
 #[cfg(not(windows))]
@@ -544,6 +593,17 @@ mod tests {
     #[test]
     fn nothing_is_reported_before_a_file_starts() {
         assert_eq!(tracker_with(&[MOVIE]).ended(Some("x".into())), None);
+    }
+
+    #[test]
+    fn resumes_with_a_per_file_start() {
+        assert_eq!(loadfile("u", None), ["loadfile", "u", "replace"]);
+        assert_eq!(loadfile("u", Some(0.0)), ["loadfile", "u", "replace"]);
+        assert_eq!(loadfile("u", Some(f64::NAN)), ["loadfile", "u", "replace"]);
+        assert_eq!(
+            loadfile("u", Some(754.0)),
+            ["loadfile", "u", "replace", "-1", "start=754.0"]
+        );
     }
 
     #[test]

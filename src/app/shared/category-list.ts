@@ -2,6 +2,12 @@ import { ChangeDetectionStrategy, Component, computed, input, output, signal } f
 
 import { Category } from '../core/xtream/xtream.models';
 
+/** An entry above the provider's categories, such as the favourites. */
+export interface ExtraCategory {
+  id: string;
+  label: string;
+}
+
 /** Filterable category sidebar; `null` selection means "All". */
 @Component({
   selector: 'app-category-list',
@@ -24,6 +30,20 @@ import { Category } from '../core/xtream/xtream.models';
           All
         </button>
       </li>
+      @for (extra of extras(); track extra.id) {
+        <li>
+          <button
+            type="button"
+            [class.active]="selected() === extra.id"
+            (click)="selectedChange.emit(extra.id)"
+          >
+            {{ extra.label }}
+          </button>
+        </li>
+      }
+      @if (extras().length) {
+        <li class="divider" role="separator"></li>
+      }
       @for (category of visible(); track category.category_id) {
         <li>
           <button
@@ -71,10 +91,15 @@ import { Category } from '../core/xtream/xtream.models';
       background: var(--accent-soft);
       color: var(--text);
     }
+    .divider {
+      margin: 0.4rem 0.75rem;
+      border-top: 1px solid var(--border);
+    }
   `,
 })
 export class CategoryList {
   readonly categories = input.required<Category[]>();
+  readonly extras = input<ExtraCategory[]>([]);
   readonly selected = input<string | null>(null);
   readonly selectedChange = output<string | null>();
 

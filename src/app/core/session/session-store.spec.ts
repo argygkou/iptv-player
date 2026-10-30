@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 
+import { LibraryStore } from '../library/library-store';
 import { XtreamApi } from '../xtream/xtream-api';
 import { AccountInfo, Profile } from '../xtream/xtream.models';
 import { SessionStore } from './session-store';
@@ -9,6 +10,7 @@ const profile: Profile = { id: 'p1', name: 'alice@tv', server: 'http://tv/', use
 
 describe('SessionStore', () => {
   let api: Record<string, ReturnType<typeof vi.fn>>;
+  let library: Record<string, ReturnType<typeof vi.fn>>;
 
   function setup(): SessionStore {
     api = {
@@ -16,7 +18,13 @@ describe('SessionStore', () => {
       listProfiles: vi.fn().mockResolvedValue([profile]),
       logout: vi.fn().mockResolvedValue(undefined),
     };
-    TestBed.configureTestingModule({ providers: [{ provide: XtreamApi, useValue: api }] });
+    library = { load: vi.fn().mockResolvedValue(undefined), clear: vi.fn() };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: XtreamApi, useValue: api },
+        { provide: LibraryStore, useValue: library },
+      ],
+    });
     return TestBed.inject(SessionStore);
   }
 
@@ -29,6 +37,7 @@ describe('SessionStore', () => {
     expect(store.isSignedIn()).toBe(true);
     expect(store.profile()).toEqual(profile);
     expect(store.profiles()).toEqual([profile]);
+    expect(library['load']).toHaveBeenCalled();
   });
 
   it('stays signed out and keeps the reason when restoring fails', async () => {
@@ -51,5 +60,6 @@ describe('SessionStore', () => {
 
     expect(store.isSignedIn()).toBe(false);
     expect(api['logout']).toHaveBeenCalled();
+    expect(library['clear']).toHaveBeenCalled();
   });
 });

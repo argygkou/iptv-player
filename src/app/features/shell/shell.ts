@@ -16,6 +16,7 @@ export class Shell {
   private readonly router = inject(Router);
 
   protected readonly sections = [
+    { path: '/library', label: 'My List', icon: '⭐' },
     { path: '/live', label: 'Live TV', icon: '📺' },
     { path: '/guide', label: 'TV Guide', icon: '🗓️' },
     { path: '/movies', label: 'Movies', icon: '🎬' },

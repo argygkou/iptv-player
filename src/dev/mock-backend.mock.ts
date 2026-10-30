@@ -144,6 +144,28 @@ const signInSaved = (id: string) => {
   return { account: account(profile.username), profile };
 };
 
+/** One library for the mock, kept across reloads; the app keeps one per profile. */
+const LIBRARY_KEY = 'iptv.mock.library';
+interface MockItem {
+  kind: string;
+  id: string;
+  [field: string]: unknown;
+}
+interface MockLibrary {
+  favourites: (MockItem & { addedAt: number })[];
+  history: (MockItem & { watchedAt: number; position: number; duration: number })[];
+}
+const loadLibrary = (): MockLibrary =>
+  JSON.parse(localStorage.getItem(LIBRARY_KEY) ?? 'null') ?? { favourites: [], history: [] };
+const updateLibrary = (change: (library: MockLibrary) => void): MockLibrary => {
+  const library = loadLibrary();
+  change(library);
+  localStorage.setItem(LIBRARY_KEY, JSON.stringify(library));
+  return library;
+};
+const same = (a: MockItem) => (b: MockItem) => a.kind === b.kind && a.id === b.id;
+const seconds = () => Math.floor(Date.now() / 1000);
+
 type Args = Record<string, any>;
 const handlers: Record<string, (args: Args) => unknown> = {
   login: ({ server, username, remember }) => {
@@ -184,6 +206,34 @@ const handlers: Record<string, (args: Args) => unknown> = {
     return null;
   },
   stream_url: () => SAMPLE_VIDEO,
+  library_get: () => loadLibrary(),
+  library_set_favourite: ({ item, favourite }) =>
+    updateLibrary((library) => {
+      const rest = library.favourites.filter((f) => !same(item)(f));
+      const existing = library.favourites.find(same(item));
+      library.favourites = favourite
+        ? existing
+          ? library.favourites.map((f) => (same(item)(f) ? { ...f, ...item } : f))
+          : [{ ...item, addedAt: seconds() }, ...rest]
+        : rest;
+    }),
+  library_record: ({ item, position, duration }) =>
+    updateLibrary((library) => {
+      const previous = library.history.find(same(item));
+      library.history = [
+        {
+          ...item,
+          watchedAt: seconds(),
+          position: position ?? previous?.position ?? 0,
+          duration: duration ?? previous?.duration ?? 0,
+        },
+        ...library.history.filter((w) => !same(item)(w)),
+      ].slice(0, 200);
+    }),
+  library_forget: ({ kind, id }) =>
+    updateLibrary((library) => {
+      library.history = library.history.filter((w) => !same({ kind, id })(w));
+    }),
   // Native playback needs libmpv in the desktop app; the mock uses the webview player.
   player_available: () => false,
   xtream: ({ action, query = {} }) => {

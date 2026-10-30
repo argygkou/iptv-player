@@ -1,0 +1,45 @@
+<h1>My List</h1>
+
+@for (row of rows(); track row.title) {
+  <section>
+    <h2>{{ row.title }}</h2>
+    <ul class="row">
+      @for (card of row.cards; track card.key) {
+        <li [class.wide]="card.wide" [class.logo]="card.logo">
+          <a [routerLink]="card.to.link" [queryParams]="card.to.queryParams" [title]="card.title">
+            <div class="art">
+              @if (card.item.image) {
+                <img [src]="card.item.image" alt="" loading="lazy" />
+              } @else {
+                <div class="placeholder">{{ card.title }}</div>
+              }
+              @if (card.progress; as progress) {
+                <div class="progress" [style.width.%]="progress * 100"></div>
+              }
+            </div>
+            <strong>{{ card.title }}</strong>
+            @if (card.subtitle) {
+              <small>{{ card.subtitle }}</small>
+            }
+          </a>
+          @if (row.removable) {
+            <button
+              type="button"
+              class="remove"
+              title="Remove from this list"
+              aria-label="Remove from this list"
+              (click)="forget(card.item)"
+            >
+              ✕
+            </button>
+          }
+        </li>
+      }
+    </ul>
+  </section>
+} @empty {
+  <p class="empty">
+    Nothing here yet. Star channels, movies and series to keep them here, and anything you start
+    watching shows up to continue.
+  </p>
+}

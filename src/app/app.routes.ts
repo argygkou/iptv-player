@@ -15,6 +15,10 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'live' },
       {
+        path: 'library',
+        loadComponent: () => import('./features/library/library-page').then((m) => m.LibraryPage),
+      },
+      {
         path: 'live',
         loadComponent: () => import('./features/live/live-page').then((m) => m.LivePage),
       },

@@ -1,5 +1,6 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
 
+import { LibraryStore } from '../library/library-store';
 import { XtreamApi } from '../xtream/xtream-api';
 import { AccountInfo, Credentials, Profile, SignedIn } from '../xtream/xtream.models';
 
@@ -10,6 +11,7 @@ import { AccountInfo, Credentials, Profile, SignedIn } from '../xtream/xtream.mo
 @Injectable({ providedIn: 'root' })
 export class SessionStore {
   private readonly api = inject(XtreamApi);
+  private readonly library = inject(LibraryStore);
 
   readonly account = signal<AccountInfo | null>(null);
   /** The saved profile in use, or `null` for a one-off sign-in. */
@@ -53,6 +55,7 @@ export class SessionStore {
 
   async signOut(): Promise<void> {
     await this.api.logout();
+    this.library.clear();
     this.account.set(null);
     this.profile.set(null);
   }
@@ -61,6 +64,8 @@ export class SessionStore {
     this.account.set(account);
     this.profile.set(profile);
     this.restoreError.set(null);
+    // Each account has its own favourites and history.
+    void this.library.load();
   }
 
   private async refreshProfiles(): Promise<void> {

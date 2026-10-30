@@ -5,9 +5,13 @@ import {
   ElementRef,
   input,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import type Mpegts from 'mpegts.js';
+
+import { Progress } from '../../core/library/library.models';
+import { PROGRESS_INTERVAL } from './progress';
 
 /**
  * Fallback player for when libmpv is unavailable (mock mode, other platforms):
@@ -69,6 +73,10 @@ const LIVE_CONFIG: Mpegts.Config = {
 export class WebVideoPlayer {
   readonly src = input.required<string>();
   readonly live = input(false);
+  /** Seconds to start from; read when a stream opens. */
+  readonly start = input(0);
+  /** Receives the position of a movie or episode while it plays and when it closes. */
+  readonly onProgress = input<(progress: Progress) => void>();
 
   protected readonly error = signal<string | null>(null);
   private readonly video = viewChild.required<ElementRef<HTMLVideoElement>>('video');
@@ -107,6 +115,29 @@ export class WebVideoPlayer {
           player?.destroy();
         });
       } else {
+        const [start, report] = untracked(() => [this.start(), this.onProgress()] as const);
+        if (start > 0) {
+          const seek = () => (element.currentTime = start);
+          element.addEventListener('loadedmetadata', seek, { once: true });
+          onCleanup(() => element.removeEventListener('loadedmetadata', seek));
+        }
+        if (report) {
+          const sample = () => {
+            if (element.readyState > 0) {
+              const duration = element.duration;
+              report({
+                position: element.currentTime,
+                duration: Number.isFinite(duration) ? duration : null,
+              });
+            }
+          };
+          const timer = setInterval(sample, PROGRESS_INTERVAL);
+          // Registered before the reset below, so it still sees the position.
+          onCleanup(() => {
+            clearInterval(timer);
+            sample();
+          });
+        }
         element.src = src;
         void element.play().catch(() => undefined);
         onCleanup(() => {

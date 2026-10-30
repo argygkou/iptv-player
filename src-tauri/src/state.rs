@@ -5,6 +5,7 @@ use rand::Rng;
 use tokio::sync::RwLock;
 
 use crate::error::{AppError, AppResult};
+use crate::library::LibraryStore;
 use crate::profiles::ProfileStore;
 use crate::xtream::Credentials;
 
@@ -15,7 +16,9 @@ pub struct AppState {
     pub http: reqwest::Client,
     pub session: RwLock<Option<Credentials>>,
     pub profiles: ProfileStore,
-    /// App data directory; holds profiles and, on Linux, the secrets file.
+    /// Favourites and history of the signed-in account.
+    pub library: LibraryStore,
+    /// App data directory; holds profiles, libraries and, on Linux, the secrets file.
     pub data_dir: PathBuf,
     pub proxy_port: u16,
     /// Required on every proxy request so other local processes or web pages
@@ -34,6 +37,7 @@ impl AppState {
             http,
             session: RwLock::new(None),
             profiles: ProfileStore::load(&data_dir),
+            library: LibraryStore::new(&data_dir),
             data_dir,
             proxy_port,
             proxy_token: random_hex(16),
