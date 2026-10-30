@@ -154,7 +154,12 @@ impl Native {
                 ("keep-open", "yes"),
                 ("hwdec", "auto-safe"),
                 ("osc", "yes"),
-                ("script-opts", "osc-windowcontrols=no"),
+                // Show the controller on any mouse movement over the video, not just
+                // the bottom half, and keep it up a little longer than mpv does.
+                (
+                    "script-opts",
+                    "osc-windowcontrols=no,osc-deadzonesize=0,osc-hidetimeout=2000",
+                ),
                 ("input-default-bindings", "yes"),
                 ("input-vo-keyboard", "yes"),
                 ("ytdl", "no"),
