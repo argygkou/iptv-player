@@ -11,7 +11,9 @@ Windows is the first target; Linux and iOS are planned (see [Roadmap](#roadmap))
   opens straight on Live TV. Several accounts can be saved and picked on the sign-in screen.
 - **Native playback** through libmpv: MKV, HEVC, AC3/DTS, subtitles and audio tracks all play. mpv's on-screen
   controller ([ModernZ](https://github.com/Samillion/ModernZ)) handles seeking, volume and track selection; double-click or press `F` for fullscreen, `Esc` to leave it.
-- **Live TV**: categories, channel search, the channel's programmes with progress.
+  On Live TV, the controller's title names the programme, and a now/next banner appears on entering fullscreen and on `I`.
+- **Live TV**: categories, channel search, the channel's programmes with progress. In a window wider than 2:1, the
+  programmes sit beside the player, in fullscreen too.
 - **TV Guide**: the provider's full XMLTV guide as a timeline grid per category, six hours at a time, with
   Earlier/Later to move up to a week either way. Click a channel or what is on now to watch it.
 - **Catch-up**: on channels the provider records (`tv_archive`), past programmes are marked ⟲ in the guide and

@@ -4,6 +4,7 @@ import {
   catchupMinutes,
   decodeBase64Utf8,
   isAiring,
+  nowAndNext,
   panelTime,
   progress,
   toProgramme,
@@ -11,6 +12,25 @@ import {
 import { LiveStream, Programme } from './xtream.models';
 
 describe('epg', () => {
+  it('finds what is on and what follows, whatever the order', () => {
+    const at = (hour: number) => new Date(2026, 0, 1, hour);
+    const programme = (title: string, start: number, end: number): Programme => ({
+      title,
+      description: '',
+      start: at(start),
+      end: at(end),
+    });
+    const [past, on, soon, later] = [
+      programme('Past', 18, 19),
+      programme('On', 19, 21),
+      programme('Soon', 21, 22),
+      programme('Later', 22, 23),
+    ];
+    expect(nowAndNext([later, on, past, soon], at(20))).toEqual({ current: on, next: soon });
+    expect(nowAndNext([later, soon], at(20))).toEqual({ current: undefined, next: soon });
+    expect(nowAndNext([past], at(20))).toEqual({ current: undefined, next: undefined });
+  });
+
   it('decodes base64 UTF-8 titles', () => {
     // "Ειδήσεις" (Greek for "News")
     expect(decodeBase64Utf8('zpXOuc60zq7Pg861zrnPgg==')).toBe('Ειδήσεις');

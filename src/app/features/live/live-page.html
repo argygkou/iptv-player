@@ -47,13 +47,14 @@
   </ul>
 </section>
 
-<section class="content now-playing">
+<section class="content now-playing" [class.fullscreen]="fullscreen()">
   @if (playback.hasValue()) {
     <!-- A recording is not a visit to the channel, so it stays out of the history. -->
     <app-video-player
       [src]="playback.value()"
       [live]="!recording()"
       [item]="recording() ? undefined : item()"
+      [info]="playerInfo()"
     />
   } @else {
     <div class="idle">

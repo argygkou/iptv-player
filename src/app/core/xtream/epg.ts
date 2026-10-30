@@ -26,6 +26,18 @@ export function isAiring(programme: Programme, now: Date): boolean {
   return programme.start <= now && now < programme.end;
 }
 
+/** What is on at `now` and the first programme after it, from a list in any order. */
+export function nowAndNext(
+  programmes: Programme[],
+  now: Date,
+): { current?: Programme; next?: Programme } {
+  const current = programmes.find((p) => isAiring(p, now));
+  const next = programmes
+    .filter((p) => p.start > now)
+    .reduce<Programme | undefined>((a, b) => (a && a.start <= b.start ? a : b), undefined);
+  return { current, next };
+}
+
 /** Fraction of the programme already aired, clamped to 0..1. */
 export function progress(programme: Programme, now: Date): number {
   const total = programme.end.getTime() - programme.start.getTime();

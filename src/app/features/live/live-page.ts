@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, formatDate } from '@angular/common';
 import {
   afterRenderEffect,
   ChangeDetectionStrategy,
@@ -7,6 +7,7 @@ import {
   ElementRef,
   inject,
   input,
+  LOCALE_ID,
   resource,
   signal,
   viewChild,
@@ -21,6 +22,7 @@ import {
   canCatchUp,
   catchupMinutes,
   isAiring,
+  nowAndNext,
   panelTime,
   progress,
 } from '../../core/xtream/epg';
@@ -32,6 +34,7 @@ import { FavouriteButton } from '../../shared/favourite-button';
 import { Clock } from '../../shared/clock';
 import { FAVOURITES, isSavedList, RECENT } from '../../shared/saved-lists';
 import { filterByName } from '../../shared/search';
+import { NativePlayback, PlayerInfo } from '../../shared/player/native-playback';
 import { VideoPlayer } from '../../shared/player/video-player';
 
 const HOUR = 60 * 60 * 1000;
@@ -51,8 +54,10 @@ export class LivePage {
   private readonly router = inject(Router);
   private readonly session = inject(SessionStore);
   private readonly tvGuide = inject(TvGuide);
+  private readonly locale = inject(LOCALE_ID);
   protected readonly clock = inject(Clock);
   protected readonly library = inject(LibraryStore);
+  protected readonly fullscreen = inject(NativePlayback).fullscreen;
 
   /** Query params, bound through `withComponentInputBinding`. */
   readonly category = input<string>();
@@ -182,6 +187,30 @@ export class LivePage {
     return stream && archiveDays(stream) > 0 ? list : list.filter((p) => p.end > now);
   });
 
+  /** The guide for the fullscreen player, which hides this page. */
+  protected readonly playerInfo = computed<PlayerInfo | undefined>(() => {
+    const stream = this.selected();
+    if (!stream) {
+      return undefined;
+    }
+    const line = (label: string, p: Programme) =>
+      `${label} ${this.time(p.start)}–${this.time(p.end)}  ${p.title}`;
+    const recording = this.recording();
+    if (recording) {
+      return {
+        title: `${stream.name}: ${recording.title}`,
+        details: `${stream.name}\n${line('Catch-up', recording)}`,
+      };
+    }
+    const { current, next } = nowAndNext(this.programmes(), this.clock.now());
+    return {
+      title: current ? `${stream.name}: ${current.title}` : stream.name,
+      details: [stream.name, current && line('Now', current), next && line('Next', next)]
+        .filter(Boolean)
+        .join('\n'),
+    };
+  });
+
   private readonly epgList = viewChild<ElementRef<HTMLElement>>('epgList');
 
   protected readonly isAiring = (p: Programme) => isAiring(p, this.clock.now());
@@ -198,6 +227,7 @@ export class LivePage {
     afterRenderEffect(() => {
       this.programmes();
       this.recording();
+      this.fullscreen();
       const list = this.epgList()?.nativeElement;
       const current =
         list?.querySelector<HTMLElement>('.playing') ?? list?.querySelector<HTMLElement>('.airing');
@@ -238,6 +268,10 @@ export class LivePage {
       queryParams: { catchup: null, until: null },
       queryParamsHandling: 'merge',
     });
+  }
+
+  private time(date: Date): string {
+    return formatDate(date, 'HH:mm', this.locale);
   }
 
   protected channelId(stream: LiveStream): string {

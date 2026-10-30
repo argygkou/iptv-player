@@ -29,6 +29,13 @@ use crate::state::AppState;
 /// The DLL from the `mpv-dev` builds, bundled next to the executable.
 pub const LIBRARY: &str = "libmpv-2.dll";
 
+/// mpv property holding the info banner's text; empty when there is nothing to say.
+#[cfg_attr(not(windows), allow(dead_code))]
+const INFO: &str = "user-data/app/info";
+/// How long the banner stays up, in milliseconds.
+#[cfg(windows)]
+const INFO_DURATION: &str = "6000";
+
 /// A rectangle in CSS pixels, relative to the webview.
 #[derive(Debug, Clone, Copy, Deserialize)]
 pub struct Rect {
@@ -322,6 +329,10 @@ impl Native {
                 log::warn!("cannot unbind {key}: {err}");
             }
         }
+        let show = format!("show-text \"{}\" {INFO_DURATION}", info_text());
+        if let Err(err) = mpv.command(&["keybind", "i", show.as_str()]) {
+            log::warn!("cannot bind the info banner: {err}");
+        }
         let tracker = Arc::new(Tracker::default());
         let (events, app, window) = (mpv.clone(), app.clone(), window.clone());
         let track = tracker.clone();
@@ -337,8 +348,16 @@ impl Native {
     }
 }
 
+/// mpv expands this to the banner's text, or to nothing when it was never set.
+#[cfg(windows)]
+fn info_text() -> String {
+    format!("${{{INFO}:}}")
+}
+
 /// Embedded mpv cannot go fullscreen itself, so its `fullscreen` property
 /// (the OSC button, double-click, `f`, `Esc`) drives the app window instead.
+/// The page's guide is out of sight in fullscreen, so entering it shows the
+/// info banner, which `i` brings back.
 #[cfg(windows)]
 fn forward_events(mpv: &mpv::Mpv, tracker: &Tracker, app: &AppHandle, window: &WebviewWindow) {
     use tauri::Emitter;
@@ -358,6 +377,9 @@ fn forward_events(mpv: &mpv::Mpv, tracker: &Tracker, app: &AppHandle, window: &W
             Some(mpv::Event::Flag(name, value)) if name == "fullscreen" => {
                 let _ = window.set_fullscreen(value);
                 let _ = app.emit("player://fullscreen", value);
+                if value {
+                    let _ = mpv.command(&["show-text", info_text().as_str(), INFO_DURATION]);
+                }
             }
             _ => {}
         }
@@ -420,6 +442,25 @@ pub async fn player_set_bounds(player: State<'_, Player>, bounds: Bounds) -> App
     Ok(())
 }
 
+/// Sets the title on mpv's controller and the text of the info banner. Empty
+/// strings go back to the file's own title and an empty banner.
+#[cfg(windows)]
+#[tauri::command]
+pub async fn player_set_info(
+    player: State<'_, Player>,
+    title: String,
+    details: String,
+) -> AppResult<()> {
+    let Some(native) = player.native.get() else {
+        return Ok(());
+    };
+    native
+        .mpv
+        .set_property("force-media-title", &title)
+        .and_then(|()| native.mpv.set_property(INFO, &details))
+        .map_err(AppError::Playback)
+}
+
 /// Where the current file is; `None` when nothing is loaded.
 #[cfg(windows)]
 #[tauri::command]
@@ -469,6 +510,16 @@ pub fn player_open(
 #[cfg(not(windows))]
 #[tauri::command]
 pub fn player_set_bounds(_player: State<'_, Player>, _bounds: Bounds) -> AppResult<()> {
+    Err(unavailable())
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub fn player_set_info(
+    _player: State<'_, Player>,
+    _title: String,
+    _details: String,
+) -> AppResult<()> {
     Err(unavailable())
 }
 

@@ -11,7 +11,7 @@ import {
 
 import { LibraryStore } from '../../core/library/library-store';
 import { LibraryItem, Progress } from '../../core/library/library.models';
-import { NativePlayback } from './native-playback';
+import { NativePlayback, PlayerInfo } from './native-playback';
 import { NativeVideoPlayer } from './native-video-player';
 import { WebVideoPlayer } from './web-video-player';
 
@@ -33,6 +33,7 @@ import { WebVideoPlayer } from './web-video-player';
           [live]="live()"
           [start]="start()"
           [onProgress]="report()"
+          [info]="info()"
         />
       } @else {
         <app-web-video-player
@@ -60,6 +61,8 @@ export class VideoPlayer {
   readonly item = input<LibraryItem>();
   /** Seconds to start from. */
   readonly start = input(0);
+  /** What mpv's controller and info banner say about the stream. */
+  readonly info = input<PlayerInfo>();
 
   private readonly playback = inject(NativePlayback);
   private readonly library = inject(LibraryStore);

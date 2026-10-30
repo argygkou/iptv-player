@@ -60,6 +60,7 @@ pub fn run() {
             player::player_available,
             player::player_open,
             player::player_set_bounds,
+            player::player_set_info,
             player::player_stop,
         ])
         .run(tauri::generate_context!())
