@@ -309,6 +309,7 @@ interface ShownGroup extends CategoryGroup {
       place-items: center;
       width: 1.6rem;
       height: 1.6rem;
+      padding: 0;
       border-radius: var(--radius);
     }
     .action:hover {
