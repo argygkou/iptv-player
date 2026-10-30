@@ -9,8 +9,11 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "tauri": "tauri",
+    "predev": "node scripts/fetch-libmpv.mjs",
     "dev": "tauri dev",
-    "bundle": "tauri build"
+    "prebundle": "node scripts/fetch-libmpv.mjs",
+    "bundle": "tauri build",
+    "fetch-libmpv": "node scripts/fetch-libmpv.mjs"
   },
   "private": true,
   "dependencies": {
@@ -30,6 +33,7 @@
     "@angular/cli": "^22.2.1",
     "@angular/compiler-cli": "^22.2.0",
     "@tauri-apps/cli": "^2.12.1",
+    "7zip-bin": "^5.2.0",
     "jsdom": "^30.0.0",
     "prettier": "^3.8.1",
     "typescript": "~6.0.2",

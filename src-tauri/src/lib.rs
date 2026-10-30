@@ -1,5 +1,6 @@
 mod commands;
 mod error;
+mod player;
 mod profiles;
 mod proxy;
 mod secrets;
@@ -10,6 +11,7 @@ use std::sync::Arc;
 
 use tauri::Manager;
 
+use crate::player::Player;
 use crate::state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -29,6 +31,11 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             let state = Arc::new(AppState::new(listener.local_addr()?.port(), data_dir));
             app.manage(state.clone());
+            let library = app.path().resource_dir()?.join(player::LIBRARY);
+            if !library.is_file() {
+                log::warn!("{} not found; using webview playback", library.display());
+            }
+            app.manage(Player::new(Some(library).filter(|path| path.is_file())));
             tauri::async_runtime::spawn(proxy::serve(listener, state));
             Ok(())
         })
@@ -41,6 +48,10 @@ pub fn run() {
             commands::logout,
             commands::xtream,
             commands::stream_url,
+            player::player_available,
+            player::player_open,
+            player::player_set_bounds,
+            player::player_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

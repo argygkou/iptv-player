@@ -18,6 +18,8 @@ pub enum AppError {
     UnknownProfile,
     #[error("The saved password for this profile is missing")]
     MissingSecret,
+    #[error("Playback failed: {0}")]
+    Playback(String),
     #[error("Could not save app data: {0}")]
     Storage(String),
 }

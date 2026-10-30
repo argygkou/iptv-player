@@ -51,11 +51,26 @@ jobs:
           node-version: 24
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
       - run: npm ci
+      - name: Fetch libmpv
+        run: npm run fetch-libmpv
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - run: npm run bundle -- --bundles nsis,msi
+      # The native player only compiles on Windows, so lint and test it here too.
+      - working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+      - working-directory: src-tauri
+        run: cargo test
+      - name: Check that libmpv is bundled
+        shell: pwsh
+        run: |
+          if (-not (Test-Path src-tauri/target/release/libmpv-2.dll)) { throw 'libmpv-2.dll missing from the release build' }
       - uses: actions/upload-artifact@v4
         with:
           name: infinite-iptv-windows

@@ -16,7 +16,7 @@ import { LiveStream, Programme } from '../../core/xtream/xtream.models';
 import { CategoryList } from '../../shared/category-list';
 import { Clock } from '../../shared/clock';
 import { filterByName } from '../../shared/search';
-import { VideoPlayer } from '../../shared/video-player';
+import { VideoPlayer } from '../../shared/player/video-player';
 
 @Component({
   selector: 'app-live-page',

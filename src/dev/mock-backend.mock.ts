@@ -184,6 +184,8 @@ const handlers: Record<string, (args: Args) => unknown> = {
     return null;
   },
   stream_url: () => SAMPLE_VIDEO,
+  // Native playback needs libmpv in the desktop app; the mock uses the webview player.
+  player_available: () => false,
   xtream: ({ action, query = {} }) => {
     const byCategory = <T extends { category_id: string }>(list: T[]) =>
       query.categoryId ? list.filter((item) => item.category_id === query.categoryId) : list;
