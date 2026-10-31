@@ -506,6 +506,9 @@ impl VideoView {
             let steps = (total / 24.0).trunc();
             self.ivars().scrolled.set(total - steps * 24.0);
             steps as i64
+        } else if delta == 0.0 {
+            // Horizontal wheels and scroll phases; `signum` would make this 1.
+            0
         } else {
             delta.signum() as i64
         };

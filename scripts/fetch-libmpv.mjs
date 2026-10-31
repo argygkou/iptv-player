@@ -104,7 +104,11 @@ for (const pkg of PACKAGES) {
     await fetchPackage(pkg);
   }
 }
-if (process.platform === 'darwin' && !existsSync(join(LIB, 'libmpv.2.dylib'))) {
+// libmpv.json is written last, so an interrupted copy is redone.
+if (
+  process.platform === 'darwin' &&
+  !(existsSync(join(LIB, 'libmpv.2.dylib')) && existsSync(join(LIB, 'libmpv.json')))
+) {
   bundleHomebrewLibmpv();
 }
 
