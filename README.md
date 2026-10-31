@@ -152,14 +152,6 @@ update.
 To try an installer from a branch without releasing, run the **Release** workflow manually from the Actions tab;
 the installer is attached to the run as an artifact.
 
-## Microsoft Store
-
-The Store accepts Win32 apps submitted as an `.msi` or `.exe` installer, which `npm run bundle` already
-produces. Before submitting: reserve the app name in Partner Center, set `identifier` and `publisher` in
-`src-tauri/tauri.conf.json`, replace the placeholder icons (`npx tauri icon path/to/icon.png`), and sign the
-installer with a code-signing certificate. See the
-[Tauri guide](https://v2.tauri.app/distribute/microsoft-store/).
-
 ## Known limitations
 
 - The player controls are [ModernZ](https://github.com/Samillion/ModernZ) (LGPL-2.1), bundled in `mpv/` next to the
@@ -173,5 +165,4 @@ installer with a code-signing certificate. See the
 
 ## Roadmap
 
-1. Microsoft Store submission.
-2. Linux packages (`.deb`, AppImage) with native playback, then iOS through Tauri's mobile target.
+1. Linux packages (`.deb`, AppImage) with native playback, then iOS through Tauri's mobile target.
