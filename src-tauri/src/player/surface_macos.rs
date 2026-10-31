@@ -20,7 +20,7 @@
 use std::cell::Cell;
 use std::ffi::{c_char, c_void};
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use dispatch2::{DispatchQueue, DispatchQueueAttr, DispatchRetained, MainThreadBound};
@@ -84,6 +84,9 @@ struct Redraw {
     queued: AtomicBool,
     /// The layer, once created; it lives as long as the app.
     layer: AtomicPtr<VideoLayer>,
+    /// Width and height in pixels of the last frame drawn (`width << 32 | height`),
+    /// which is the space mpv's mouse coordinates are in.
+    size: AtomicU64,
 }
 
 impl Redraw {
@@ -93,6 +96,7 @@ impl Redraw {
             dirty: AtomicBool::new(true),
             queued: AtomicBool::new(false),
             layer: AtomicPtr::new(std::ptr::null_mut()),
+            size: AtomicU64::new(0),
         }))
     }
 
@@ -260,7 +264,12 @@ define_class!(
                 glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &mut framebuffer);
                 glGetIntegerv(GL_VIEWPORT, viewport.as_mut_ptr());
             }
-            if let Err(err) = self.ivars().renderer.render(framebuffer, viewport[2], viewport[3]) {
+            let (width, height) = (viewport[2], viewport[3]);
+            self.ivars()
+                .redraw
+                .size
+                .store(((width as u64) << 32) | height as u64, Ordering::Release);
+            if let Err(err) = self.ivars().renderer.render(framebuffer, width, height) {
                 log::warn!("mpv render failed: {err}");
             }
             // SAFETY: the superclass implementation flushes the context.
@@ -312,7 +321,8 @@ impl ClipView {
 
 struct ViewState {
     mpv: Mpv,
-    /// Pixels per point, for mpv's mouse coordinates.
+    redraw: &'static Redraw,
+    /// Pixels per point, for mpv's mouse coordinates until a frame is drawn.
     scale: Cell<f64>,
     /// Trackpad scrolling not yet passed on, in points.
     scrolled: Cell<f64>,
@@ -419,9 +429,10 @@ define_class!(
 );
 
 impl VideoView {
-    fn new(mtm: MainThreadMarker, mpv: Mpv) -> Retained<Self> {
+    fn new(mtm: MainThreadMarker, mpv: Mpv, redraw: &'static Redraw) -> Retained<Self> {
         let this = Self::alloc(mtm).set_ivars(ViewState {
             mpv,
+            redraw,
             scale: Cell::new(1.0),
             scrolled: Cell::new(0.0),
         });
@@ -459,9 +470,20 @@ impl VideoView {
     /// Tells mpv where the mouse is, in pixels from the top left.
     fn move_to(&self, event: &NSEvent) {
         let point = self.convertPoint_fromView(event.locationInWindow(), None);
-        let scale = self.ivars().scale.get();
-        let x = ((point.x * scale).round() as i64).to_string();
-        let y = ((point.y * scale).round() as i64).to_string();
+        // In the pixels of the frame mpv drew, wherever its size came from.
+        let size = self.bounds().size;
+        let drawn = self.ivars().redraw.size.load(Ordering::Acquire);
+        let (scale_x, scale_y) = if drawn != 0 && size.width > 0.0 && size.height > 0.0 {
+            (
+                (drawn >> 32) as f64 / size.width,
+                (drawn & 0xffff_ffff) as f64 / size.height,
+            )
+        } else {
+            let scale = self.ivars().scale.get();
+            (scale, scale)
+        };
+        let x = ((point.x * scale_x).round() as i64).to_string();
+        let y = ((point.y * scale_y).round() as i64).to_string();
         self.input(&["mouse", x.as_str(), y.as_str()]);
     }
 
@@ -575,14 +597,18 @@ struct Views {
 }
 
 impl Views {
-    /// A rect in CSS pixels relative to the webview, in its superview's
-    /// coordinates. CSS pixels are points, as the webview is not zoomed.
-    fn in_parent(&self, x: f64, y: f64, width: f64, height: f64) -> NSRect {
+    /// A rect in CSS pixels relative to the viewport, in the webview's
+    /// superview's coordinates. CSS pixels are points, as the webview is not
+    /// zoomed. `inset` is how far below the webview's top the viewport starts.
+    fn in_parent(&self, inset: f64, x: f64, y: f64, width: f64, height: f64) -> NSRect {
+        let view = self.webview.bounds();
+        let top = inset + y;
         let y = if self.webview.isFlipped() {
-            y
+            view.origin.y + top
         } else {
-            self.webview.bounds().size.height - y - height
+            view.origin.y + view.size.height - top - height
         };
+        let x = view.origin.x + x;
         let rect = NSRect::new(NSPoint::new(x, y), NSSize::new(width, height));
         // SAFETY: read on the main thread, as `Views` always is.
         let parent = unsafe { self.webview.superview() };
@@ -596,10 +622,20 @@ impl Views {
         if visible.width <= 0.0 || visible.height <= 0.0 {
             return self.hide();
         }
+        // On recent macOS the webview reaches under the title bar, and the page
+        // starts below it.
+        let inset = bounds.viewport.map_or(0.0, |viewport| {
+            (self.webview.bounds().size.height - viewport.height).max(0.0)
+        });
         CATransaction::begin();
         CATransaction::setDisableActions(true);
-        self.clip
-            .setFrame(self.in_parent(visible.x, visible.y, visible.width, visible.height));
+        self.clip.setFrame(self.in_parent(
+            inset,
+            visible.x,
+            visible.y,
+            visible.width,
+            visible.height,
+        ));
         // The clip view is flipped, so this is the offset from its top left.
         self.video.setFrame(NSRect::new(
             NSPoint::new(rect.x - visible.x, rect.y - visible.y),
@@ -609,8 +645,50 @@ impl Views {
         self.layer.setContentsScale(bounds.scale);
         self.layer.setFrame(self.video.bounds());
         CATransaction::commit();
+        self.report_geometry(inset);
         self.clip.setHidden(false);
         self.redraw.request();
+    }
+
+    /// Writes the geometry to mpv's log when it changes, to diagnose
+    /// placement on macOS versions with a different window layout.
+    fn report_geometry(&self, inset: f64) {
+        let view = self.webview.bounds();
+        let frame = self.webview.frame();
+        let clip = self.clip.frame();
+        let line = format!(
+            "app: webview flipped={} bounds=({:.0},{:.0} {:.0}x{:.0}) frame=({:.0},{:.0} {:.0}x{:.0}) inset={inset:.0} clip=({:.0},{:.0} {:.0}x{:.0})",
+            self.webview.isFlipped(),
+            view.origin.x,
+            view.origin.y,
+            view.size.width,
+            view.size.height,
+            frame.origin.x,
+            frame.origin.y,
+            frame.size.width,
+            frame.size.height,
+            clip.origin.x,
+            clip.origin.y,
+            clip.size.width,
+            clip.size.height,
+        );
+        thread_local! {
+            static LAST: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+        }
+        let changed = LAST.with(|last| {
+            let changed = *last.borrow() != line;
+            if changed {
+                last.replace(line.clone());
+            }
+            changed
+        });
+        if changed {
+            let _ = self
+                .video
+                .ivars()
+                .mpv
+                .command(&["print-text", line.as_str()]);
+        }
     }
 
     fn hide(&self) {
@@ -651,7 +729,7 @@ fn build(webview: *mut c_void, mpv: Mpv) -> Result<MainThreadBound<Views>, Strin
     redraw
         .layer
         .store(Retained::as_ptr(&layer).cast_mut(), Ordering::Release);
-    let video = VideoView::new(mtm, mpv);
+    let video = VideoView::new(mtm, mpv, redraw);
     // Setting the layer before `wantsLayer` makes the view host it as is.
     video.setLayer(Some(&layer));
     video.setWantsLayer(true);

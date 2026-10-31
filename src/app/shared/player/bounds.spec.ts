@@ -36,6 +36,7 @@ describe('bounds', () => {
 
     expect(bounds.rect).toEqual({ x: 0, y: 50, width: 480, height: 270 });
     expect(bounds.visible).toEqual({ x: 0, y: 100, width: 480, height: 220 });
+    expect(bounds.viewport).toEqual({ width: window.innerWidth, height: window.innerHeight });
     scroller.remove();
   });
 

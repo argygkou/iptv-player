@@ -70,6 +70,18 @@ pub struct Bounds {
     pub visible: Option<Rect>,
     /// `devicePixelRatio`, to convert CSS to physical pixels.
     pub scale: f64,
+    /// The viewport's size in CSS pixels; the webview's native view can be
+    /// taller than this (macOS, under the title bar).
+    #[serde(default)]
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub viewport: Option<Size>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[allow(dead_code)] // macOS only reads the height.
+pub struct Size {
+    pub width: f64,
+    pub height: f64,
 }
 
 // Physical pixels are for the Windows child window; macOS places views in points.
@@ -586,6 +598,7 @@ mod tests {
             rect: rect(10.5, 20.0, 640.0, 360.0),
             visible: Some(rect(10.5, 20.0, 640.0, 360.0)),
             scale: 1.5,
+            viewport: None,
         };
         assert_eq!(bounds.window(), (16, 30, 960, 540));
         assert_eq!(bounds.visible_region(), Some((0, 0, 960, 540)));
@@ -597,6 +610,7 @@ mod tests {
             rect: rect(0.0, -100.0, 800.0, 450.0),
             visible: Some(rect(0.0, 0.0, 800.0, 350.0)),
             scale: 1.0,
+            viewport: None,
         };
         assert_eq!(bounds.visible_region(), Some((0, 100, 800, 450)));
     }
@@ -607,6 +621,7 @@ mod tests {
             rect: rect(0.0, 0.0, 800.0, 450.0),
             visible: None,
             scale: 1.0,
+            viewport: None,
         };
         assert_eq!(hidden.visible_region(), None);
         let empty = Bounds {
