@@ -35,7 +35,6 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": ["nsis"],
     "category": "Video",
     "shortDescription": "IPTV player for Xtream Codes providers",
     "icon": [
@@ -48,6 +47,10 @@
     "windows": {
       "webviewInstallMode": { "type": "downloadBootstrapper" },
       "nsis": { "installMode": "currentUser" }
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0",
+      "signingIdentity": "-"
     }
   },
   "plugins": {

@@ -12,6 +12,9 @@ export interface Bounds {
   /** The part of `rect` that is not scrolled or clipped out of view. */
   visible: Rect | null;
   scale: number;
+  /** The viewport's size in CSS pixels. The native view can be taller, for
+   *  example when it reaches under the macOS title bar. */
+  viewport: { width: number; height: number };
 }
 
 export function intersect(a: Rect, b: Rect): Rect | null {
@@ -51,5 +54,10 @@ export function measure(element: HTMLElement): Bounds {
       visible = intersect(visible, toRect(parent.getBoundingClientRect()));
     }
   }
-  return { rect, visible, scale: window.devicePixelRatio };
+  return {
+    rect,
+    visible,
+    scale: window.devicePixelRatio,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+  };
 }

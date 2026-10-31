@@ -38,7 +38,7 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             let state = Arc::new(AppState::new(listener.local_addr()?.port(), data_dir));
             app.manage(state.clone());
-            let library = app.path().resource_dir()?.join(player::LIBRARY);
+            let library = app.path().resource_dir()?.join(player::BUNDLED_LIBRARY);
             if !library.is_file() {
                 log::warn!("{} not found; using webview playback", library.display());
             }

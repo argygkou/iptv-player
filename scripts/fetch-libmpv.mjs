@@ -1,18 +1,30 @@
-// Downloads the native player's third-party files, which the Windows bundle
-// picks up (see src-tauri/tauri.windows.conf.json):
+// Gathers the native player's third-party files, which the bundle picks up
+// (see src-tauri/tauri.windows.conf.json and tauri.macos.conf.json):
 //
-// - libmpv-2.dll into src-tauri/lib/, from the mpv-dev builds at
+// - Windows: libmpv-2.dll into src-tauri/lib/, from the mpv-dev builds at
 //   https://github.com/shinchiro/mpv-winbuild-cmake/releases
-// - the ModernZ player interface into src-tauri/mpv/ (mpv's config directory),
-//   from https://github.com/Samillion/ModernZ/releases
+// - macOS: Homebrew's libmpv (`brew install mpv`) and every library it needs
+//   into src-tauri/lib/, relinked to load from there and signed ad hoc. No
+//   prebuilt macOS libmpv includes Lua, which ModernZ needs.
+// - Both: the ModernZ player interface into src-tauri/mpv/ (mpv's config
+//   directory), from https://github.com/Samillion/ModernZ/releases
 //
-// Runs before `npm run dev` and `npm run bundle`; does nothing off Windows or
-// for files that are already there. Each package pins a release and the
-// SHA-256 of each file; a null hash skips the check, for trying a new release
-// and reading its hash from the output or from src-tauri/lib/<name>.json.
+// Runs before `npm run dev` and `npm run bundle`; does nothing on other
+// platforms or for files that are already there. Each download pins a release
+// and the SHA-256 of each file; a null hash skips the check, for trying a new
+// release and reading its hash from the output or from src-tauri/lib/<name>.json.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,6 +39,7 @@ const MPV = join(TAURI, 'mpv');
 const PACKAGES = [
   {
     name: 'libmpv',
+    platform: 'win32',
     repo: 'shinchiro/mpv-winbuild-cmake',
     release: '20261021',
     installed: join(LIB, 'libmpv-2.dll'),
@@ -76,7 +89,8 @@ function into(dir) {
   };
 }
 
-if (process.platform !== 'win32' && !process.argv.includes('--force')) {
+const force = process.argv.includes('--force');
+if (!['win32', 'darwin'].includes(process.platform) && !force) {
   process.exit(0);
 }
 
@@ -86,9 +100,90 @@ if (process.env.GITHUB_TOKEN) {
 }
 
 for (const pkg of PACKAGES) {
-  if (!existsSync(pkg.installed)) {
+  if ((!pkg.platform || pkg.platform === process.platform || force) && !existsSync(pkg.installed)) {
     await fetchPackage(pkg);
   }
+}
+// libmpv.json is written last, so an interrupted copy is redone.
+if (
+  process.platform === 'darwin' &&
+  !(existsSync(join(LIB, 'libmpv.2.dylib')) && existsSync(join(LIB, 'libmpv.json')))
+) {
+  bundleHomebrewLibmpv();
+}
+
+/** Copies Homebrew's libmpv and its dependencies into src-tauri/lib. */
+function bundleHomebrewLibmpv() {
+  let prefix;
+  try {
+    prefix = run('brew', ['--prefix']);
+  } catch {
+    console.warn('Homebrew not found: the app will use the webview player. See README.md.');
+    return;
+  }
+  const entry = join(prefix, 'lib', 'libmpv.2.dylib');
+  if (!existsSync(entry)) {
+    console.warn('libmpv not found: run `brew install mpv`, or the app uses the webview player.');
+    return;
+  }
+  const version = run('brew', ['list', '--versions', 'mpv']);
+  console.log(`Bundling ${entry} (${version})…`);
+  mkdirSync(LIB, { recursive: true });
+
+  // Breadth-first over the dependency tree, by install name. Every library
+  // lands in lib/ under the file name of its install name, and every
+  // reference to it becomes @loader_path/<name>.
+  const copied = new Map(); // file name in lib/ -> source path
+  const queue = [{ name: 'libmpv.2.dylib', source: realpathSync(entry) }];
+  while (queue.length) {
+    const { name, source } = queue.shift();
+    if (copied.has(name)) continue;
+    copied.set(name, source);
+    const target = join(LIB, name);
+    copyFileSync(source, target);
+    chmodSync(target, 0o644);
+    const changes = ['-id', `@loader_path/${name}`];
+    for (const dependency of linkedLibraries(source)) {
+      if (dependency.startsWith('/usr/lib/') || dependency.startsWith('/System/')) continue;
+      const depName = basename(dependency);
+      changes.push('-change', dependency, `@loader_path/${depName}`);
+      queue.push({ name: depName, source: resolveLibrary(dependency, source, prefix) });
+    }
+    run('install_name_tool', [...changes, target]);
+  }
+  // install_name_tool invalidates signatures, and Apple Silicon only loads signed code.
+  for (const name of copied.keys()) {
+    run('codesign', ['--force', '--sign', '-', join(LIB, name)]);
+  }
+  const source = { source: 'homebrew', version, libraries: [...copied.keys()].sort() };
+  writeFileSync(join(LIB, 'libmpv.json'), `${JSON.stringify(source, null, 2)}\n`);
+  console.log(`Installed libmpv with ${copied.size - 1} libraries`);
+}
+
+/** The libraries `file` links against, as written in it (`otool -L`). */
+function linkedLibraries(file) {
+  return run('otool', ['-L', file])
+    .split('\n')
+    .slice(1)
+    .map((line) => line.trim().replace(/ \(compatibility version.*$/, ''))
+    .filter((path) => path && path !== file);
+}
+
+/** The file an install name refers to, from the library `from` that links it. */
+function resolveLibrary(dependency, from, prefix) {
+  const name = basename(dependency);
+  const candidates = dependency.startsWith('@')
+    ? [join(dirname(from), name), join(prefix, 'lib', name)]
+    : [dependency];
+  const found = candidates.find((path) => existsSync(path));
+  if (!found) {
+    throw new Error(`${dependency} (linked from ${from}) not found`);
+  }
+  return realpathSync(found);
+}
+
+function run(command, args) {
+  return execFileSync(command, args, { encoding: 'utf8' }).trim();
 }
 
 async function fetchPackage({ name, repo, release, prepare, assets }) {

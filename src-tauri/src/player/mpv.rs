@@ -79,6 +79,8 @@ struct Api {
     observe_property: unsafe extern "C" fn(*mut Handle, u64, *const c_char, c_int) -> c_int,
     wait_event: unsafe extern "C" fn(*mut Handle, c_double) -> *mut RawEvent,
     error_string: unsafe extern "C" fn(c_int) -> *const c_char,
+    #[cfg(target_os = "macos")]
+    render: render::Api,
     // Keeps the function pointers above valid.
     _library: Library,
 }
@@ -106,6 +108,13 @@ impl Api {
                 observe_property: symbol!("mpv_observe_property"),
                 wait_event: symbol!("mpv_wait_event"),
                 error_string: symbol!("mpv_error_string"),
+                #[cfg(target_os = "macos")]
+                render: render::Api {
+                    create: symbol!("mpv_render_context_create"),
+                    set_update_callback: symbol!("mpv_render_context_set_update_callback"),
+                    update: symbol!("mpv_render_context_update"),
+                    render: symbol!("mpv_render_context_render"),
+                },
                 _library: library,
             })
         }
@@ -240,6 +249,166 @@ impl Mpv {
                 }
                 _ => None,
             }
+        }
+    }
+}
+
+/// The render API, through which mpv draws into an OpenGL context the app
+/// owns. macOS needs it because libmpv cannot embed its own window there; see
+/// `render.h` in mpv.
+#[cfg(target_os = "macos")]
+pub mod render {
+    use std::ffi::{CString, c_char, c_int, c_void};
+
+    use super::{Handle, Mpv};
+
+    #[repr(C)]
+    pub struct Context {
+        _private: [u8; 0],
+    }
+
+    #[repr(C)]
+    pub(super) struct Param {
+        kind: c_int,
+        data: *mut c_void,
+    }
+
+    #[repr(C)]
+    struct OpenGlInit {
+        get_proc_address: unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_void,
+        context: *mut c_void,
+    }
+
+    #[repr(C)]
+    struct Fbo {
+        fbo: c_int,
+        w: c_int,
+        h: c_int,
+        internal_format: c_int,
+    }
+
+    const PARAM_INVALID: c_int = 0;
+    const PARAM_API_TYPE: c_int = 1;
+    const PARAM_OPENGL_INIT_PARAMS: c_int = 2;
+    const PARAM_OPENGL_FBO: c_int = 3;
+    const PARAM_FLIP_Y: c_int = 4;
+    const PARAM_BLOCK_FOR_TARGET_TIME: c_int = 12;
+    const UPDATE_FRAME: u64 = 1;
+
+    pub(super) struct Api {
+        pub create: unsafe extern "C" fn(*mut *mut Context, *mut Handle, *mut Param) -> c_int,
+        pub set_update_callback: unsafe extern "C" fn(
+            *mut Context,
+            Option<unsafe extern "C" fn(*mut c_void)>,
+            *mut c_void,
+        ),
+        pub update: unsafe extern "C" fn(*mut Context) -> u64,
+        pub render: unsafe extern "C" fn(*mut Context, *mut Param) -> c_int,
+    }
+
+    /// An OpenGL render context. It is never freed, like the mpv instance.
+    /// Its functions must not run concurrently, which the single layer that
+    /// draws with it guarantees.
+    pub struct Renderer {
+        mpv: Mpv,
+        context: *mut Context,
+    }
+
+    // SAFETY: the render API may be called from any thread, one at a time.
+    unsafe impl Send for Renderer {}
+    unsafe impl Sync for Renderer {}
+
+    impl Renderer {
+        /// Must run with the OpenGL context mpv will draw into current.
+        /// `get_proc_address` resolves OpenGL function names for mpv.
+        pub fn new(
+            mpv: &Mpv,
+            get_proc_address: unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_void,
+        ) -> Result<Self, String> {
+            let api_type = CString::new("opengl").expect("no NUL");
+            let mut init = OpenGlInit {
+                get_proc_address,
+                context: std::ptr::null_mut(),
+            };
+            let mut params = [
+                Param {
+                    kind: PARAM_API_TYPE,
+                    data: api_type.as_ptr() as *mut c_void,
+                },
+                Param {
+                    kind: PARAM_OPENGL_INIT_PARAMS,
+                    data: (&raw mut init).cast(),
+                },
+                Param {
+                    kind: PARAM_INVALID,
+                    data: std::ptr::null_mut(),
+                },
+            ];
+            let mut context = std::ptr::null_mut();
+            // SAFETY: valid handle and a parameter list ending in PARAM_INVALID,
+            // whose data outlives the call.
+            mpv.check(unsafe {
+                (mpv.api.render.create)(&mut context, mpv.handle, params.as_mut_ptr())
+            })?;
+            Ok(Self {
+                mpv: mpv.clone(),
+                context,
+            })
+        }
+
+        /// `callback(data)` runs on an mpv thread whenever a new frame is
+        /// ready; it must not call back into mpv.
+        ///
+        /// # Safety
+        /// `data` must stay valid for as long as mpv lives.
+        pub unsafe fn on_update(
+            &self,
+            callback: unsafe extern "C" fn(*mut c_void),
+            data: *mut c_void,
+        ) {
+            // SAFETY: valid context; the caller guarantees `data`.
+            unsafe { (self.mpv.api.render.set_update_callback)(self.context, Some(callback), data) }
+        }
+
+        /// Whether mpv has a new video frame to draw, after an update callback.
+        pub fn has_frame(&self) -> bool {
+            // SAFETY: valid context.
+            unsafe { (self.mpv.api.render.update)(self.context) & UPDATE_FRAME != 0 }
+        }
+
+        /// Draws the current frame and OSD into framebuffer `fbo` of the
+        /// current OpenGL context, `width` x `height` pixels, top row first.
+        pub fn render(&self, fbo: i32, width: i32, height: i32) -> Result<(), String> {
+            let mut target = Fbo {
+                fbo,
+                w: width,
+                h: height,
+                internal_format: 0,
+            };
+            let mut flip: c_int = 1;
+            // The caller draws at display refresh; never wait for a frame's time.
+            let mut block: c_int = 0;
+            let mut params = [
+                Param {
+                    kind: PARAM_OPENGL_FBO,
+                    data: (&raw mut target).cast(),
+                },
+                Param {
+                    kind: PARAM_FLIP_Y,
+                    data: (&raw mut flip).cast(),
+                },
+                Param {
+                    kind: PARAM_BLOCK_FOR_TARGET_TIME,
+                    data: (&raw mut block).cast(),
+                },
+                Param {
+                    kind: PARAM_INVALID,
+                    data: std::ptr::null_mut(),
+                },
+            ];
+            // SAFETY: valid context; the parameters outlive the call.
+            self.mpv
+                .check(unsafe { (self.mpv.api.render.render)(self.context, params.as_mut_ptr()) })
         }
     }
 }
