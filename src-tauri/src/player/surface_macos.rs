@@ -645,50 +645,8 @@ impl Views {
         self.layer.setContentsScale(bounds.scale);
         self.layer.setFrame(self.video.bounds());
         CATransaction::commit();
-        self.report_geometry(inset);
         self.clip.setHidden(false);
         self.redraw.request();
-    }
-
-    /// Writes the geometry to mpv's log when it changes, to diagnose
-    /// placement on macOS versions with a different window layout.
-    fn report_geometry(&self, inset: f64) {
-        let view = self.webview.bounds();
-        let frame = self.webview.frame();
-        let clip = self.clip.frame();
-        let line = format!(
-            "app: webview flipped={} bounds=({:.0},{:.0} {:.0}x{:.0}) frame=({:.0},{:.0} {:.0}x{:.0}) inset={inset:.0} clip=({:.0},{:.0} {:.0}x{:.0})",
-            self.webview.isFlipped(),
-            view.origin.x,
-            view.origin.y,
-            view.size.width,
-            view.size.height,
-            frame.origin.x,
-            frame.origin.y,
-            frame.size.width,
-            frame.size.height,
-            clip.origin.x,
-            clip.origin.y,
-            clip.size.width,
-            clip.size.height,
-        );
-        thread_local! {
-            static LAST: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
-        }
-        let changed = LAST.with(|last| {
-            let changed = *last.borrow() != line;
-            if changed {
-                last.replace(line.clone());
-            }
-            changed
-        });
-        if changed {
-            let _ = self
-                .video
-                .ivars()
-                .mpv
-                .command(&["print-text", line.as_str()]);
-        }
     }
 
     fn hide(&self) {
