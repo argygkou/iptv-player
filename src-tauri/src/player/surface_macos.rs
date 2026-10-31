@@ -11,18 +11,19 @@
 //! would in its own window: the on-screen controller, double-click for
 //! fullscreen, and the keyboard shortcuts all work.
 //!
-//! The views live on the main thread. mpv draws on Core Animation's thread
-//! whenever it reports a new frame, so playback never waits for the main thread.
+//! The views live on the main thread. Drawing happens on a serial queue of its
+//! own, which mpv's update callback wakes for each new frame (as mpv's own
+//! macOS backend does), so playback never waits for the main thread.
 
 #![allow(deprecated)] // OpenGL is deprecated on macOS, but still what libmpv renders with.
 
 use std::cell::Cell;
 use std::ffi::{c_char, c_void};
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 
-use dispatch2::MainThreadBound;
+use dispatch2::{DispatchQueue, DispatchQueueAttr, DispatchRetained, MainThreadBound};
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, Bool};
 use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
@@ -69,9 +70,50 @@ unsafe extern "C" fn get_proc_address(_context: *mut c_void, name: *const c_char
 }
 
 /// Runs on an mpv thread when there is something new to draw.
-unsafe extern "C" fn on_update(dirty: *mut c_void) {
-    // SAFETY: `dirty` is the leaked `AtomicBool` from `build`.
-    unsafe { &*(dirty as *const AtomicBool) }.store(true, Ordering::Release);
+unsafe extern "C" fn on_update(redraw: *mut c_void) {
+    // SAFETY: `redraw` is the leaked `Redraw` from `build`.
+    unsafe { &*(redraw as *const Redraw) }.request();
+}
+
+/// Schedules the layer's drawing on a serial queue.
+struct Redraw {
+    queue: DispatchRetained<DispatchQueue>,
+    /// Set when mpv has a new frame or the layer changed size.
+    dirty: AtomicBool,
+    /// A display is queued and has not started yet; requests until then share it.
+    queued: AtomicBool,
+    /// The layer, once created; it lives as long as the app.
+    layer: AtomicPtr<VideoLayer>,
+}
+
+impl Redraw {
+    fn new() -> &'static Self {
+        Box::leak(Box::new(Self {
+            queue: DispatchQueue::new("com.argygkou.infiniteiptv.video", DispatchQueueAttr::SERIAL),
+            dirty: AtomicBool::new(true),
+            queued: AtomicBool::new(false),
+            layer: AtomicPtr::new(std::ptr::null_mut()),
+        }))
+    }
+
+    /// Draws the layer again soon. Callable from any thread.
+    fn request(&'static self) {
+        self.dirty.store(true, Ordering::Release);
+        if self.queued.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        self.queue.exec_async(move || {
+            self.queued.store(false, Ordering::Release);
+            let layer = self.layer.load(Ordering::Acquire);
+            if layer.is_null() {
+                return;
+            }
+            // SAFETY: the layer is never freed. Displaying a layer off the
+            // main thread is supported when the transaction is flushed.
+            unsafe { (*layer).display() };
+            CATransaction::flush();
+        });
+    }
 }
 
 /// The pixel format and OpenGL context the layer draws with.
@@ -146,8 +188,10 @@ impl Gl {
 struct LayerState {
     gl: Gl,
     renderer: Renderer,
-    /// Set when mpv has a new frame or the layer changed size.
-    dirty: &'static AtomicBool,
+    redraw: &'static Redraw,
+    /// Core Animation may also display the layer on the main thread, and
+    /// mpv's render calls must not overlap.
+    drawing: Mutex<()>,
 }
 
 define_class!(
@@ -159,6 +203,15 @@ define_class!(
     struct VideoLayer;
 
     impl VideoLayer {
+        #[unsafe(method(display))]
+        fn display_locked(&self) {
+            let _drawing = self.ivars().drawing.lock().unwrap_or_else(|e| e.into_inner());
+            // SAFETY: CALayer's display, which calls `can_draw` and `draw`.
+            unsafe {
+                let _: () = msg_send![super(self), display];
+            }
+        }
+
         #[unsafe(method(copyCGLPixelFormatForDisplayMask:))]
         fn copy_pixel_format(&self, _mask: u32) -> CGLPixelFormatObj {
             // SAFETY: a valid pixel format; Core Animation releases this reference.
@@ -181,7 +234,7 @@ define_class!(
             _display: *const CVTimeStamp,
         ) -> Bool {
             let state = self.ivars();
-            if !state.dirty.swap(false, Ordering::AcqRel) {
+            if !state.redraw.dirty.swap(false, Ordering::AcqRel) {
                 return Bool::NO;
             }
             // Lets mpv process the update; the frame is drawn either way, as
@@ -229,8 +282,6 @@ impl VideoLayer {
         let this = Self::alloc().set_ivars(state);
         // SAFETY: CALayer's designated initialiser.
         let layer: Retained<Self> = unsafe { msg_send![super(this), init] };
-        // Asks `can_draw` at every display refresh, off the main thread.
-        layer.setAsynchronous(true);
         layer.setOpaque(true);
         layer
     }
@@ -520,7 +571,7 @@ struct Views {
     clip: Retained<ClipView>,
     video: Retained<VideoView>,
     layer: Retained<VideoLayer>,
-    dirty: &'static AtomicBool,
+    redraw: &'static Redraw,
 }
 
 impl Views {
@@ -559,7 +610,7 @@ impl Views {
         self.layer.setFrame(self.video.bounds());
         CATransaction::commit();
         self.clip.setHidden(false);
-        self.dirty.store(true, Ordering::Release);
+        self.redraw.request();
     }
 
     fn hide(&self) {
@@ -587,15 +638,19 @@ fn build(webview: *mut c_void, mpv: Mpv) -> Result<MainThreadBound<Views>, Strin
     let gl = Gl::new()?;
     let renderer = gl.with_current(|| Renderer::new(&mpv, get_proc_address))?;
     // Shared with mpv's update callback for the app's lifetime.
-    let dirty: &'static AtomicBool = Box::leak(Box::new(AtomicBool::new(true)));
-    // SAFETY: `dirty` is never freed.
-    unsafe { renderer.on_update(on_update, (dirty as *const AtomicBool).cast_mut().cast()) };
+    let redraw = Redraw::new();
+    // SAFETY: `redraw` is never freed.
+    unsafe { renderer.on_update(on_update, (redraw as *const Redraw).cast_mut().cast()) };
 
     let layer = VideoLayer::new(LayerState {
         gl,
         renderer,
-        dirty,
+        redraw,
+        drawing: Mutex::new(()),
     });
+    redraw
+        .layer
+        .store(Retained::as_ptr(&layer).cast_mut(), Ordering::Release);
     let video = VideoView::new(mtm, mpv);
     // Setting the layer before `wantsLayer` makes the view host it as is.
     video.setLayer(Some(&layer));
@@ -614,7 +669,7 @@ fn build(webview: *mut c_void, mpv: Mpv) -> Result<MainThreadBound<Views>, Strin
             clip,
             video,
             layer,
-            dirty,
+            redraw,
         },
         mtm,
     ))
