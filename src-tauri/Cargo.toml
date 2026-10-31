@@ -34,7 +34,6 @@ flate2 = "1.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
-libloading = "0.8"
 windows-sys = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_Graphics_Gdi",
@@ -43,8 +42,33 @@ windows-sys = { version = "0.61", features = [
   "Win32_UI_WindowsAndMessaging",
 ] }
 
+[target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
+libloading = "0.8"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", features = ["apple-native"] }
+libc = "0.2"
+dispatch2 = "0.3"
+objc2 = "0.6"
+objc2-core-foundation = { version = "0.3", features = ["CFCGTypes"] }
+objc2-core-video = { version = "0.3", default-features = false, features = ["std", "objc2", "CVBase"] }
+objc2-open-gl = { version = "0.3", default-features = false, features = ["std", "CGLTypes", "CGLCurrent"] }
+objc2-foundation = { version = "0.3", features = ["NSGeometry", "NSString"] }
+objc2-app-kit = { version = "0.3", features = [
+  "NSEvent",
+  "NSResponder",
+  "NSTrackingArea",
+  "NSView",
+  "NSWindow",
+] }
+objc2-quartz-core = { version = "0.3", features = [
+  "CALayer",
+  "CAOpenGLLayer",
+  "CATransaction",
+  "objc2-core-foundation",
+  "objc2-core-video",
+  "objc2-open-gl",
+] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"

@@ -97,6 +97,13 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
+      # Homebrew's libmpv is arm64 only, so Intel Macs fall back to the webview player.
+      - name: Bundle libmpv
+        run: |
+          brew install mpv
+          npm run fetch-libmpv
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       # One universal build for Apple Silicon and Intel Macs. tauri-action lists it under both darwin-aarch64
       # and darwin-x86_64 in latest.json. The app is ad-hoc signed (bundle.macOS.signingIdentity "-"), not
       # notarized.
@@ -109,6 +116,14 @@ jobs:
         with:
           tagName: ${{ needs.release-please.outputs.tag_name }}
           args: --target universal-apple-darwin
+      - name: Check that libmpv is bundled
+        run: |
+          app="src-tauri/target/universal-apple-darwin/release/bundle/macos/Infinite IPTV.app"
+          test -f "$app/Contents/Resources/lib/libmpv.2.dylib"
+          test -f "$app/Contents/Resources/mpv/scripts/modernz.lua"
+          codesign --verify --deep --strict "$app"
+      - name: Show player package sources
+        run: cat src-tauri/lib/*.json
       - if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v6
         with:

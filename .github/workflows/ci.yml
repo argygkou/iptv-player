@@ -70,17 +70,30 @@ jobs:
         run: cargo test
 
   macos:
-    # Keychain storage and (later) the native player have macOS-only code.
+    # Keychain storage and the native player have macOS-only code.
     name: macOS lint and test
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+      - run: npm ci
+      # tauri-build checks that the bundled resources (libmpv, ModernZ) exist, even for clippy; the mpv tests
+      # also run against this libmpv.
+      - name: Bundle libmpv
+        run: |
+          brew install mpv
+          npm run fetch-libmpv
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - working-directory: src-tauri
         run: cargo clippy --all-targets -- -D warnings
       - working-directory: src-tauri

@@ -1,17 +1,22 @@
 //! Native playback through libmpv.
 //!
 //! The webview's decoders cannot play MKV, HEVC, AC3/DTS and many other formats
-//! IPTV providers serve, so on Windows playback happens in mpv instead. mpv
-//! renders into a child window ([`surface`]) that the Angular player keeps
-//! positioned over the rectangle it reserves, and mpv's own on-screen
-//! controller handles seeking, tracks, subtitles and keyboard shortcuts.
+//! IPTV providers serve, so on Windows and macOS playback happens in mpv
+//! instead. mpv draws into a native surface that the Angular player keeps
+//! positioned over the rectangle it reserves: a child window on Windows
+//! (`surface.rs`), an OpenGL layer fed through mpv's render API on macOS
+//! (`surface_macos.rs`). mpv's own on-screen controller handles seeking,
+//! tracks, subtitles and keyboard shortcuts.
 //!
 //! The commands are `async`, so they run on the async runtime rather than the
 //! main thread; see [`Native::start`] for why that matters.
 
-#[cfg(windows)]
+#[cfg(native)]
 mod mpv;
 #[cfg(windows)]
+mod surface;
+#[cfg(target_os = "macos")]
+#[path = "surface_macos.rs"]
 mod surface;
 
 use std::collections::VecDeque;
@@ -19,21 +24,33 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
-#[cfg(windows)]
+#[cfg(native)]
 use tauri::Manager;
 use tauri::{AppHandle, State, WebviewWindow};
 
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 
-/// The DLL from the `mpv-dev` builds, bundled next to the executable.
+/// libmpv's file name in `src-tauri/lib`.
+#[cfg(not(target_os = "macos"))]
 pub const LIBRARY: &str = "libmpv-2.dll";
+#[cfg(target_os = "macos")]
+#[cfg_attr(not(test), allow(dead_code))] // Only the tests use the build tree's copy.
+pub const LIBRARY: &str = "libmpv.2.dylib";
+
+/// Where the bundle puts libmpv, relative to the resource directory: next to
+/// the executable on Windows (the DLL from the `mpv-dev` builds), and in
+/// `Resources/lib` with its dependencies on macOS.
+#[cfg(not(target_os = "macos"))]
+pub const BUNDLED_LIBRARY: &str = LIBRARY;
+#[cfg(target_os = "macos")]
+pub const BUNDLED_LIBRARY: &str = "lib/libmpv.2.dylib";
 
 /// mpv property holding the info banner's text; empty when there is nothing to say.
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(native), allow(dead_code))]
 const INFO: &str = "user-data/app/info";
 /// How long the banner stays up, in milliseconds.
-#[cfg(windows)]
+#[cfg(native)]
 const INFO_DURATION: &str = "6000";
 
 /// A rectangle in CSS pixels, relative to the webview.
@@ -55,6 +72,7 @@ pub struct Bounds {
     pub scale: f64,
 }
 
+// Physical pixels are for the Windows child window; macOS places views in points.
 #[cfg_attr(not(windows), allow(dead_code))]
 impl Bounds {
     fn px(&self, value: f64) -> i32 {
@@ -88,7 +106,7 @@ impl Bounds {
 
 /// What `player_open` should play.
 #[derive(Debug, Deserialize)]
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(native), allow(dead_code))]
 pub struct Media {
     pub url: String,
     /// Chosen by the webview, which uses it to match errors to this call.
@@ -108,7 +126,7 @@ pub struct Progress {
 }
 
 /// `loadfile` arguments for `url`, starting `start` seconds in when given.
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(native), allow(dead_code))]
 fn loadfile(url: &str, start: Option<f64>) -> Vec<String> {
     let mut args = vec!["loadfile".to_owned(), url.to_owned(), "replace".to_owned()];
     if let Some(start) = start.filter(|s| s.is_finite() && *s > 0.0) {
@@ -129,13 +147,13 @@ struct Entry {
 /// from a stream the user already left is not blamed on the next one. mpv
 /// starts files in `loadfile` order, one `StartFile` event each.
 #[derive(Default)]
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(native), allow(dead_code))]
 struct Tracker {
     pending: Mutex<VecDeque<Entry>>,
     current: Mutex<Option<Entry>>,
 }
 
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(native), allow(dead_code))]
 impl Tracker {
     fn queued(&self, entry: Entry) {
         lock(&self.pending).push_back(entry);
@@ -181,11 +199,11 @@ struct PlaybackError {
 /// Lazily created mpv instance and its window.
 pub struct Player {
     library: Option<PathBuf>,
-    #[cfg(windows)]
+    #[cfg(native)]
     native: tokio::sync::OnceCell<Native>,
 }
 
-#[cfg(windows)]
+#[cfg(native)]
 struct Native {
     mpv: mpv::Mpv,
     surface: surface::Surface,
@@ -198,20 +216,20 @@ impl Player {
     pub fn new(library: Option<PathBuf>) -> Self {
         Self {
             library: library.filter(|path| loads(path)),
-            #[cfg(windows)]
+            #[cfg(native)]
             native: Default::default(),
         }
     }
 }
 
-#[cfg(windows)]
+#[cfg(native)]
 fn loads(path: &std::path::Path) -> bool {
     mpv::probe(path)
         .inspect_err(|err| log::warn!("cannot load {}: {err}", path.display()))
         .is_ok()
 }
 
-#[cfg(not(windows))]
+#[cfg(not(native))]
 fn loads(_path: &std::path::Path) -> bool {
     false
 }
@@ -230,29 +248,34 @@ fn check_url(state: &AppState, url: &str) -> AppResult<()> {
     }
 }
 
-#[cfg(windows)]
+#[cfg(native)]
 impl Native {
-    /// Creates the window on the main thread and mpv on the calling one. mpv
-    /// must never be called from the main thread: its video thread sends
-    /// messages to the parent window, so a main thread blocked in mpv could
-    /// deadlock with it.
+    /// On Windows, creates the window on the main thread and mpv on the
+    /// calling one. mpv must never be called from the main thread: its video
+    /// thread sends messages to the parent window, so a main thread blocked in
+    /// mpv could deadlock with it. On macOS, mpv comes first, as the views
+    /// draw with its renderer and pass input to it.
     async fn start(
         library: &std::path::Path,
         window: &WebviewWindow,
         app: &AppHandle,
     ) -> AppResult<Self> {
         let failed = |err: tauri::Error| AppError::Playback(err.to_string());
-        let parent = window.hwnd().map_err(failed)?.0 as isize;
-        let (sender, receiver) = tokio::sync::oneshot::channel();
-        window
-            .run_on_main_thread(move || {
-                let _ = sender.send(surface::Surface::create(parent));
-            })
-            .map_err(failed)?;
-        let surface = receiver
-            .await
-            .map_err(|_| unavailable())?
-            .map_err(AppError::Playback)?;
+        #[cfg(windows)]
+        let surface = {
+            let parent = window.hwnd().map_err(failed)?.0 as isize;
+            let (sender, receiver) = tokio::sync::oneshot::channel();
+            window
+                .run_on_main_thread(move || {
+                    let _ = sender.send(surface::Surface::create(parent));
+                })
+                .map_err(failed)?;
+            receiver
+                .await
+                .map_err(|_| unavailable())?
+                .map_err(AppError::Playback)?
+        };
+        #[cfg(windows)]
         let wid = surface.id();
         // mpv's own log, for diagnosing playback and input problems.
         let log_dir = app.path().app_log_dir().map_err(failed)?;
@@ -268,9 +291,14 @@ impl Native {
             dir.trim_start_matches(r"\\?\").to_owned()
         });
         let mut options = vec![
+            #[cfg(windows)]
             ("wid", wid.as_str()),
-            ("idle", "yes"),
+            #[cfg(windows)]
             ("force-window", "yes"),
+            // Draws through the render API, into the app's own view.
+            #[cfg(target_os = "macos")]
+            ("vo", "libmpv"),
+            ("idle", "yes"),
             ("keep-open", "yes"),
             ("hwdec", "auto-safe"),
             // Reconnect dropped HTTP streams instead of ending playback.
@@ -322,6 +350,10 @@ impl Native {
             ]),
         }
         let mpv = mpv::Mpv::new(library, &options).map_err(AppError::Playback)?;
+        #[cfg(target_os = "macos")]
+        let surface = surface::Surface::create(window, &mpv)
+            .await
+            .map_err(AppError::Playback)?;
         mpv.observe_flag("fullscreen").map_err(AppError::Playback)?;
         // `q` would shut mpv down for good; the app owns the player's lifetime.
         for key in ["q", "Q"] {
@@ -349,7 +381,7 @@ impl Native {
 }
 
 /// mpv expands this to the banner's text, or to nothing when it was never set.
-#[cfg(windows)]
+#[cfg(native)]
 fn info_text() -> String {
     format!("${{{INFO}:}}")
 }
@@ -358,7 +390,7 @@ fn info_text() -> String {
 /// (the OSC button, double-click, `f`, `Esc`) drives the app window instead.
 /// The page's guide is out of sight in fullscreen, so entering it shows the
 /// info banner, which `i` brings back.
-#[cfg(windows)]
+#[cfg(native)]
 fn forward_events(mpv: &mpv::Mpv, tracker: &Tracker, app: &AppHandle, window: &WebviewWindow) {
     use tauri::Emitter;
     loop {
@@ -391,7 +423,7 @@ pub fn player_available(player: State<'_, Player>) -> bool {
     player.library.is_some()
 }
 
-#[cfg(windows)]
+#[cfg(native)]
 #[tauri::command]
 pub async fn player_open(
     app: AppHandle,
@@ -433,7 +465,7 @@ pub async fn player_open(
         .map_err(AppError::Playback)
 }
 
-#[cfg(windows)]
+#[cfg(native)]
 #[tauri::command]
 pub async fn player_set_bounds(player: State<'_, Player>, bounds: Bounds) -> AppResult<()> {
     if let Some(native) = player.native.get() {
@@ -444,7 +476,7 @@ pub async fn player_set_bounds(player: State<'_, Player>, bounds: Bounds) -> App
 
 /// Sets the title on mpv's controller and the text of the info banner. Empty
 /// strings go back to the file's own title and an empty banner.
-#[cfg(windows)]
+#[cfg(native)]
 #[tauri::command]
 pub async fn player_set_info(
     player: State<'_, Player>,
@@ -462,7 +494,7 @@ pub async fn player_set_info(
 }
 
 /// Where the current file is; `None` when nothing is loaded.
-#[cfg(windows)]
+#[cfg(native)]
 #[tauri::command]
 pub async fn player_progress(player: State<'_, Player>) -> AppResult<Option<Progress>> {
     let Some(native) = player.native.get() else {
@@ -479,7 +511,7 @@ pub async fn player_progress(player: State<'_, Player>) -> AppResult<Option<Prog
     Ok(Some(Progress { position, duration }))
 }
 
-#[cfg(windows)]
+#[cfg(native)]
 #[tauri::command]
 pub async fn player_stop(player: State<'_, Player>) -> AppResult<()> {
     let Some(native) = player.native.get() else {
@@ -493,7 +525,7 @@ pub async fn player_stop(player: State<'_, Player>) -> AppResult<()> {
         .map_err(AppError::Playback)
 }
 
-#[cfg(not(windows))]
+#[cfg(not(native))]
 #[tauri::command]
 pub fn player_open(
     _app: AppHandle,
@@ -507,13 +539,13 @@ pub fn player_open(
     Err(unavailable())
 }
 
-#[cfg(not(windows))]
+#[cfg(not(native))]
 #[tauri::command]
 pub fn player_set_bounds(_player: State<'_, Player>, _bounds: Bounds) -> AppResult<()> {
     Err(unavailable())
 }
 
-#[cfg(not(windows))]
+#[cfg(not(native))]
 #[tauri::command]
 pub fn player_set_info(
     _player: State<'_, Player>,
@@ -523,13 +555,13 @@ pub fn player_set_info(
     Err(unavailable())
 }
 
-#[cfg(not(windows))]
+#[cfg(not(native))]
 #[tauri::command]
 pub fn player_progress(_player: State<'_, Player>) -> AppResult<Option<Progress>> {
     Ok(None)
 }
 
-#[cfg(not(windows))]
+#[cfg(not(native))]
 #[tauri::command]
 pub fn player_stop(_player: State<'_, Player>) -> AppResult<()> {
     Err(unavailable())
@@ -667,7 +699,7 @@ mod tests {
         let bundled = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("lib")
             .join(LIBRARY);
-        let expected = cfg!(windows) && bundled.is_file();
+        let expected = cfg!(native) && bundled.is_file();
         assert_eq!(Player::new(Some(bundled)).library.is_some(), expected);
     }
 }

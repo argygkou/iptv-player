@@ -37,7 +37,7 @@ src/                         Angular app (standalone components, signals, resour
 src-tauri/                   Rust backend
   src/xtream.rs              player_api.php client (allow-listed actions only)
   src/proxy.rs               Local stream relay on 127.0.0.1
-  src/player/                libmpv binding and the native video window (Windows)
+  src/player/                libmpv binding and the native video surface (Windows window, macOS OpenGL view)
   src/library.rs             Per-profile favourites and watch history
   src/catalogue.rs           Per-account cache of the category and stream lists
   src/epg.rs                 XMLTV guide download, cache and parser
@@ -85,6 +85,11 @@ page. The Angular player measures that box every frame (clipped to its scroll co
 the window to match. mpv plays the same relay URLs, and its fullscreen toggle drives the app window. The DLL is
 bundled next to the executable; without it (mock mode, other platforms) the app falls back to the webview player
 (mpegts.js for live TV). One limitation of the native window: HTML cannot be drawn on top of the video.
+
+On macOS, libmpv cannot embed a window of its own, so mpv draws through its render API into an OpenGL layer in a
+view the app places over the player's box the same way. That view passes mouse and keyboard events on to mpv as
+input commands, so the controller, double-click and shortcuts behave as on Windows. libmpv and its libraries
+come from Homebrew and are bundled in `Contents/Resources/lib`.
 
 ## Development
 
@@ -167,9 +172,11 @@ Updates installed by the app itself are not quarantined. Because each build has 
 ask once after an update whether the app may keep reading its saved passwords from the Keychain; choose
 **Always Allow**.
 
-To develop on a Mac, install the Xcode Command Line Tools (`xcode-select --install`), Node.js 24 and Rust, then use
-the same `npm` commands as above; `npm run bundle` writes the app and `.dmg` under
-`src-tauri/target/release/bundle`.
+To develop on a Mac, install the Xcode Command Line Tools (`xcode-select --install`), Node.js 24, Rust and
+[Homebrew](https://brew.sh), then `brew install mpv` for native playback. Use the same `npm` commands as above:
+`npm run fetch-libmpv` copies Homebrew's libmpv and the libraries it needs into `src-tauri/lib` (about 100 MB,
+relinked to load from there), and `npm run bundle` writes the app and `.dmg` under `src-tauri/target/release/bundle`.
+Delete `src-tauri/lib` after upgrading mpv with Homebrew to bundle the new version.
 
 ## Microsoft Store
 
@@ -186,8 +193,10 @@ installer with a code-signing certificate. See the
 - `libmpv-2.dll` comes from the [mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases)
   builds (pinned to release `20261021` and checked by SHA-256 in `scripts/fetch-libmpv.mjs`). Those builds are GPL-licensed, which matters if the
   app is ever distributed.
-- Native playback is Windows-only for now; elsewhere the webview player is used, with its codec limits. On macOS
-  (WebKit) that means live TV, MP4 and HLS play, but MKV files and AC3/DTS audio do not.
+- On macOS, libmpv comes from Homebrew (also GPL), whatever version the build machine installs; `src-tauri/lib/libmpv.json`
+  records it. It is built for Apple Silicon only, so on Intel Macs the app uses the webview player, which plays
+  live TV, MP4 and HLS but not MKV files or AC3/DTS audio.
+- Native playback covers Windows and macOS; elsewhere the webview player is used, with its codec limits.
 - If a panel expects catch-up start times in UTC rather than its own time zone, recordings start at the wrong
   hour; none seen so far.
 
