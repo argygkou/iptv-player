@@ -3,7 +3,7 @@
 A desktop IPTV player for providers that use **Xtream Codes** logins (server URL, username, password).
 Live TV with now/next, a TV guide grid, movies and series, built with **Tauri 2** (Rust) and **Angular 22**.
 
-Windows is the first target; Linux and iOS are planned (see [Roadmap](#roadmap)).
+Runs on Windows and macOS; Linux and iOS are planned (see [Roadmap](#roadmap)).
 
 ## Features
 
@@ -49,7 +49,7 @@ so the webview cannot call them directly. Every API call goes through a Tauri co
 password never reaches the webview.
 
 **Saved profiles.** `profiles.json` in the app data directory lists saved accounts (no passwords) and which one
-to restore on launch. Passwords go to Windows Credential Manager. Signing out keeps the profile for one-click
+to restore on launch. Passwords go to Windows Credential Manager, or the Keychain on macOS. Signing out keeps the profile for one-click
 sign-in but stops auto sign-in; the ✕ on the sign-in screen deletes it and its password.
 
 **Favourites and history.** Each saved profile's lists live in `library/<profile id>.json` in the app data
@@ -128,7 +128,7 @@ cargo test --manifest-path src-tauri\Cargo.toml
 playback uses a public sample video). Open http://localhost:4200 and sign in with any values. The mock is never
 included in production builds.
 
-CI runs lint and tests on Ubuntu and Windows for every pull request. It does not build installers.
+CI runs lint and tests on Ubuntu, Windows and macOS for every pull request. It does not build installers.
 
 ## Releases
 
@@ -140,7 +140,8 @@ Never bump a version by hand.
    (`feat: …`, `fix: …`, `chore: …`); a check enforces this. `feat` bumps the minor version, `fix` the patch.
 2. [release-please](https://github.com/googleapis/release-please-action) keeps a release PR open that bumps the
    version and updates `CHANGELOG.md`.
-3. Merging the release PR tags `vX.Y.Z`, publishes a GitHub Release and builds the Windows NSIS installer into it.
+3. Merging the release PR tags `vX.Y.Z`, publishes a GitHub Release and builds the Windows NSIS installer and the
+   macOS app (a universal `.dmg` for Apple Silicon and Intel) into it.
 
 Installed copies update themselves: the app checks
 `https://github.com/argygkou/iptv-player/releases/latest/download/latest.json` shortly after startup and every
@@ -150,7 +151,25 @@ public key is in `tauri.conf.json`, the private key and its password are the `TA
 update.
 
 To try an installer from a branch without releasing, run the **Release** workflow manually from the Actions tab;
-the installer is attached to the run as an artifact.
+the installers are attached to the run as artifacts.
+
+### Installing on a Mac
+
+The macOS app is ad-hoc signed, not notarized by Apple, so Gatekeeper blocks the first launch. After dragging
+**Infinite IPTV** into Applications, either open it once and choose **Open Anyway** in System Settings → Privacy &
+Security, or clear the download quarantine flag:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Infinite IPTV.app"
+```
+
+Updates installed by the app itself are not quarantined. Because each build has a new ad-hoc signature, macOS may
+ask once after an update whether the app may keep reading its saved passwords from the Keychain; choose
+**Always Allow**.
+
+To develop on a Mac, install the Xcode Command Line Tools (`xcode-select --install`), Node.js 24 and Rust, then use
+the same `npm` commands as above; `npm run bundle` writes the app and `.dmg` under
+`src-tauri/target/release/bundle`.
 
 ## Microsoft Store
 
@@ -167,7 +186,8 @@ installer with a code-signing certificate. See the
 - `libmpv-2.dll` comes from the [mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases)
   builds (pinned to release `20261021` and checked by SHA-256 in `scripts/fetch-libmpv.mjs`). Those builds are GPL-licensed, which matters if the
   app is ever distributed.
-- Native playback is Windows-only for now; elsewhere the webview player is used, with its codec limits.
+- Native playback is Windows-only for now; elsewhere the webview player is used, with its codec limits. On macOS
+  (WebKit) that means live TV, MP4 and HLS play, but MKV files and AC3/DTS audio do not.
 - If a panel expects catch-up start times in UTC rather than its own time zone, recordings start at the wrong
   hour; none seen so far.
 

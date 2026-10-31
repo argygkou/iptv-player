@@ -68,3 +68,20 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
       - working-directory: src-tauri
         run: cargo test
+
+  macos:
+    # Keychain storage and (later) the native player have macOS-only code.
+    name: macOS lint and test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+      - working-directory: src-tauri
+        run: cargo test
