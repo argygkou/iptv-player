@@ -367,8 +367,9 @@ impl Native {
             .await
             .map_err(AppError::Playback)?;
         mpv.observe_flag("fullscreen").map_err(AppError::Playback)?;
-        // `q` would shut mpv down for good; the app owns the player's lifetime.
-        for key in ["q", "Q"] {
+        // These would shut mpv down for good (mpv's default `q`, `Q`, `Ctrl+w` and
+        // media keys); the app owns the player's lifetime.
+        for key in ["q", "Q", "Ctrl+w", "CLOSE_WIN", "POWER", "STOP"] {
             if let Err(err) = mpv.command(&["keybind", key, "ignore"]) {
                 log::warn!("cannot unbind {key}: {err}");
             }
@@ -377,6 +378,8 @@ impl Native {
         if let Err(err) = mpv.command(&["keybind", "i", show.as_str()]) {
             log::warn!("cannot bind the info banner: {err}");
         }
+        #[cfg(target_os = "macos")]
+        sync_fullscreen(window, &mpv);
         let tracker = Arc::new(Tracker::default());
         let (events, app, window) = (mpv.clone(), app.clone(), window.clone());
         let track = tracker.clone();
@@ -390,6 +393,28 @@ impl Native {
             tracker,
         })
     }
+}
+
+/// Takes mpv out of fullscreen when the window leaves it on its own (the green
+/// button or the menu), so the page and `f` stay in step with the window.
+#[cfg(target_os = "macos")]
+fn sync_fullscreen(window: &WebviewWindow, mpv: &mpv::Mpv) {
+    let (mpv, watched) = (mpv.clone(), window.clone());
+    window.on_window_event(move |event| {
+        if !matches!(event, tauri::WindowEvent::Resized(_)) {
+            return;
+        }
+        let (mpv, window) = (mpv.clone(), watched.clone());
+        // Off the main thread, like every mpv call. The wait lets a fullscreen
+        // transition finish, so entering fullscreen is never undone half way.
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            if window.is_fullscreen().is_ok_and(|fullscreen| !fullscreen) {
+                // A no-op, without a property change, when mpv is not fullscreen.
+                let _ = mpv.set_property("fullscreen", "no");
+            }
+        });
+    });
 }
 
 /// mpv expands this to the banner's text, or to nothing when it was never set.

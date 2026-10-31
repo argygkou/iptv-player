@@ -186,8 +186,9 @@ Delete `src-tauri/lib` after upgrading mpv with Homebrew to bundle the new versi
   builds (pinned to release `20261021` and checked by SHA-256 in `scripts/fetch-libmpv.mjs`). Those builds are GPL-licensed, which matters if the
   app is ever distributed.
 - On macOS, libmpv comes from Homebrew (also GPL), whatever version the build machine installs; `src-tauri/lib/libmpv.json`
-  records it. It is built for Apple Silicon only, so on Intel Macs the app uses the webview player, which plays
-  live TV, MP4 and HLS but not MKV files or AC3/DTS audio.
+  records it. It is built for Apple Silicon only and for the build machine's macOS version (currently 26), so on
+  Intel Macs and older macOS versions the app uses the webview player, which plays live TV, MP4 and HLS but not
+  MKV files or AC3/DTS audio. The log says why libmpv did not load.
 - Native playback covers Windows and macOS; elsewhere the webview player is used, with its codec limits.
 - If a panel expects catch-up start times in UTC rather than its own time zone, recordings start at the wrong
   hour; none seen so far.
