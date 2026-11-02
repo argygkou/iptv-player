@@ -9,7 +9,8 @@
 //! Without its own window mpv sees no input either, so [`VideoView`] passes the
 //! mouse and keyboard on as mpv input commands. mpv then handles them as it
 //! would in its own window: the on-screen controller, double-click for
-//! fullscreen, and the keyboard shortcuts all work.
+//! fullscreen, and the keyboard shortcuts all work. mpv cannot hide a cursor
+//! it does not own, so the view does that itself in fullscreen.
 //!
 //! The views live on the main thread. Drawing happens on a serial queue of its
 //! own, which mpv's update callback wakes for each new frame (as mpv's own
@@ -23,13 +24,15 @@ use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use dispatch2::{DispatchQueue, DispatchQueueAttr, DispatchRetained, MainThreadBound};
-use objc2::rc::Retained;
+use dispatch2::{
+    DispatchQueue, DispatchQueueAttr, DispatchRetained, DispatchTime, MainThreadBound,
+};
+use objc2::rc::{Retained, Weak};
 use objc2::runtime::{AnyObject, Bool};
 use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 use objc2_app_kit::{
-    NSEvent, NSEventModifierFlags, NSResponder, NSTrackingArea, NSTrackingAreaOptions, NSView,
-    NSWindowOrderingMode,
+    NSCursor, NSEvent, NSEventModifierFlags, NSResponder, NSTrackingArea, NSTrackingAreaOptions,
+    NSView, NSWindowOrderingMode, NSWindowStyleMask,
 };
 use objc2_core_foundation::CFTimeInterval;
 use objc2_core_video::CVTimeStamp;
@@ -45,6 +48,10 @@ use tauri::WebviewWindow;
 use super::Bounds;
 use super::mpv::Mpv;
 use super::mpv::render::Renderer;
+
+/// How long the mouse rests over fullscreen video before the cursor hides; the
+/// same as ModernZ's `hidetimeout`, so the cursor and the controls go together.
+const CURSOR_HIDE_AFTER_NS: i64 = 2_500_000_000;
 
 const GL_VIEWPORT: u32 = 0x0BA2;
 const GL_DRAW_FRAMEBUFFER_BINDING: u32 = 0x8CA6;
@@ -326,6 +333,8 @@ struct ViewState {
     scale: Cell<f64>,
     /// Trackpad scrolling not yet passed on, in points.
     scrolled: Cell<f64>,
+    /// Counts mouse activity, so a pending cursor hide can tell it is stale.
+    activity: Cell<u64>,
 }
 
 define_class!(
@@ -370,6 +379,7 @@ define_class!(
 
         #[unsafe(method(mouseExited:))]
         fn mouse_exited(&self, _event: &NSEvent) {
+            self.cancel_cursor_hide();
             self.input(&["keypress", "MOUSE_LEAVE"]);
         }
 
@@ -435,6 +445,7 @@ impl VideoView {
             redraw,
             scale: Cell::new(1.0),
             scrolled: Cell::new(0.0),
+            activity: Cell::new(0),
         });
         // SAFETY: NSObject's initialiser; the frame is set when placed.
         let view: Retained<Self> = unsafe { msg_send![super(this), init] };
@@ -469,6 +480,7 @@ impl VideoView {
 
     /// Tells mpv where the mouse is, in pixels from the top left.
     fn move_to(&self, event: &NSEvent) {
+        self.hide_cursor_later();
         let point = self.convertPoint_fromView(event.locationInWindow(), None);
         // In the pixels of the frame mpv drew, wherever its size came from.
         let size = self.bounds().size;
@@ -485,6 +497,36 @@ impl VideoView {
         let x = ((point.x * scale_x).round() as i64).to_string();
         let y = ((point.y * scale_y).round() as i64).to_string();
         self.input(&["mouse", x.as_str(), y.as_str()]);
+    }
+
+    fn cancel_cursor_hide(&self) -> u64 {
+        let activity = self.ivars().activity.get().wrapping_add(1);
+        self.ivars().activity.set(activity);
+        activity
+    }
+
+    /// Hides the cursor once the mouse has rested over the video for a while
+    /// in fullscreen. AppKit shows it again as soon as the mouse moves.
+    fn hide_cursor_later(&self) {
+        let activity = self.cancel_cursor_hide();
+        let Some(mtm) = MainThreadMarker::new() else {
+            return;
+        };
+        let view = MainThreadBound::new(Weak::from(self), mtm);
+        let when = DispatchTime::NOW.time(CURSOR_HIDE_AFTER_NS);
+        let _ = DispatchQueue::main().after(when, move || {
+            // SAFETY: the main queue runs on the main thread.
+            let mtm = unsafe { MainThreadMarker::new_unchecked() };
+            let Some(view) = view.get(mtm).load() else {
+                return;
+            };
+            let fullscreen = view
+                .window()
+                .is_some_and(|w| w.styleMask().contains(NSWindowStyleMask::FullScreen));
+            if view.ivars().activity.get() == activity && fullscreen && !view.isHidden() {
+                NSCursor::setHiddenUntilMouseMoves(true);
+            }
+        });
     }
 
     fn press(&self, event: &NSEvent, action: &str, button: &str) {
