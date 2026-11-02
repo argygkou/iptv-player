@@ -546,7 +546,8 @@ impl VideoView {
             let fullscreen = view
                 .window()
                 .is_some_and(|w| w.styleMask().contains(NSWindowStyleMask::FullScreen));
-            if fullscreen && !view.isHidden() {
+            // The clip view around it is what hides when playback stops.
+            if fullscreen && !view.isHiddenOrHasHiddenAncestor() {
                 NSCursor::setHiddenUntilMouseMoves(true);
             }
         });
