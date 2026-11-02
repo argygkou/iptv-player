@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/argygkou/iptv-player/compare/v0.2.0...v0.2.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* keep the display awake while playing and hide the cursor in fullscreen ([#18](https://github.com/argygkou/iptv-player/issues/18)) ([10a93a7](https://github.com/argygkou/iptv-player/commit/10a93a7103f7c3cef56165521c697c948a0857e0))
+
 ## [0.2.0](https://github.com/argygkou/iptv-player/compare/v0.1.0...v0.2.0) (2026-10-31)
 
 
