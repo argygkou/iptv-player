@@ -23,6 +23,7 @@ use std::ffi::{c_char, c_void};
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use dispatch2::{
     DispatchQueue, DispatchQueueAttr, DispatchRetained, DispatchTime, MainThreadBound,
@@ -51,7 +52,7 @@ use super::mpv::render::Renderer;
 
 /// How long the mouse rests over fullscreen video before the cursor hides; the
 /// same as ModernZ's `hidetimeout`, so the cursor and the controls go together.
-const CURSOR_HIDE_AFTER_NS: i64 = 2_500_000_000;
+const CURSOR_HIDE_AFTER: Duration = Duration::from_millis(2500);
 
 const GL_VIEWPORT: u32 = 0x0BA2;
 const GL_DRAW_FRAMEBUFFER_BINDING: u32 = 0x8CA6;
@@ -333,8 +334,10 @@ struct ViewState {
     scale: Cell<f64>,
     /// Trackpad scrolling not yet passed on, in points.
     scrolled: Cell<f64>,
-    /// Counts mouse activity, so a pending cursor hide can tell it is stale.
-    activity: Cell<u64>,
+    /// When the cursor may hide, if the mouse stays still until then.
+    hide_cursor_at: Cell<Option<Instant>>,
+    /// Whether a cursor hide timer is pending; there is at most one.
+    hide_cursor_pending: Cell<bool>,
 }
 
 define_class!(
@@ -445,7 +448,8 @@ impl VideoView {
             redraw,
             scale: Cell::new(1.0),
             scrolled: Cell::new(0.0),
-            activity: Cell::new(0),
+            hide_cursor_at: Cell::new(None),
+            hide_cursor_pending: Cell::new(false),
         });
         // SAFETY: NSObject's initialiser; the frame is set when placed.
         let view: Retained<Self> = unsafe { msg_send![super(this), init] };
@@ -499,31 +503,50 @@ impl VideoView {
         self.input(&["mouse", x.as_str(), y.as_str()]);
     }
 
-    fn cancel_cursor_hide(&self) -> u64 {
-        let activity = self.ivars().activity.get().wrapping_add(1);
-        self.ivars().activity.set(activity);
-        activity
+    fn cancel_cursor_hide(&self) {
+        self.ivars().hide_cursor_at.set(None);
     }
 
     /// Hides the cursor once the mouse has rested over the video for a while
     /// in fullscreen. AppKit shows it again as soon as the mouse moves.
     fn hide_cursor_later(&self) {
-        let activity = self.cancel_cursor_hide();
+        self.ivars()
+            .hide_cursor_at
+            .set(Some(Instant::now() + CURSOR_HIDE_AFTER));
+        if !self.ivars().hide_cursor_pending.replace(true) {
+            self.wait_to_hide_cursor(CURSOR_HIDE_AFTER);
+        }
+    }
+
+    /// The one pending timer: when it fires early, because the mouse moved
+    /// since it was set, it sets itself again for the time left.
+    fn wait_to_hide_cursor(&self, delay: Duration) {
         let Some(mtm) = MainThreadMarker::new() else {
+            self.ivars().hide_cursor_pending.set(false);
             return;
         };
         let view = MainThreadBound::new(Weak::from(self), mtm);
-        let when = DispatchTime::NOW.time(CURSOR_HIDE_AFTER_NS);
+        let when = DispatchTime::NOW.time(delay.as_nanos().try_into().unwrap_or(i64::MAX));
         let _ = DispatchQueue::main().after(when, move || {
             // SAFETY: the main queue runs on the main thread.
             let mtm = unsafe { MainThreadMarker::new_unchecked() };
             let Some(view) = view.get(mtm).load() else {
                 return;
             };
+            let Some(at) = view.ivars().hide_cursor_at.get() else {
+                view.ivars().hide_cursor_pending.set(false);
+                return;
+            };
+            let now = Instant::now();
+            if now < at {
+                return view.wait_to_hide_cursor(at - now);
+            }
+            view.ivars().hide_cursor_pending.set(false);
+            view.ivars().hide_cursor_at.set(None);
             let fullscreen = view
                 .window()
                 .is_some_and(|w| w.styleMask().contains(NSWindowStyleMask::FullScreen));
-            if view.ivars().activity.get() == activity && fullscreen && !view.isHidden() {
+            if fullscreen && !view.isHidden() {
                 NSCursor::setHiddenUntilMouseMoves(true);
             }
         });
@@ -758,6 +781,7 @@ fn build(webview: *mut c_void, mpv: Mpv) -> Result<MainThreadBound<Views>, Strin
 
 /// The video views. The handle can be used from any thread; the views
 /// themselves are only touched on the main thread.
+#[derive(Clone)]
 pub struct Surface {
     window: WebviewWindow,
     views: Arc<MainThreadBound<Views>>,
@@ -790,6 +814,12 @@ impl Surface {
                 f(views.get(mtm));
             }
         });
+    }
+
+    /// Hides the cursor if the mouse stays still for a while, such as after
+    /// entering fullscreen from the keyboard.
+    pub fn hide_cursor_later(&self) {
+        self.on_main(|views| views.video.hide_cursor_later());
     }
 
     /// Moves the video to `bounds` and shows its visible part, or hides it

@@ -1,9 +1,9 @@
-//! Keeps the display on while the app is fullscreen.
+//! Keeps the display on while mpv is playing, as video players do.
 //!
-//! Nothing else does: on macOS mpv draws through the render API, so it has no
-//! window of its own to stop the screensaver from, and the webview player
-//! never asks. The system's idle timer would blank the screen in the middle of
-//! a film.
+//! mpv's own `stop-screensaver` needs a window of its own, which it has on
+//! Windows but not on macOS, where it draws through the render API. So the app
+//! holds the request itself, on both, while playback is neither paused nor
+//! idle.
 //!
 //! One thread owns the request, as Windows ties `SetThreadExecutionState` to
 //! the thread that calls it: it lasts until that thread clears it or exits.
@@ -105,7 +105,7 @@ mod platform {
     impl Hold {
         pub fn acquire() -> Result<Self, String> {
             let kind = CFString::from_static_str("PreventUserIdleDisplaySleep");
-            let name = CFString::from_static_str("Infinite IPTV is playing fullscreen");
+            let name = CFString::from_static_str("Infinite IPTV is playing video");
             let mut id = 0;
             // SAFETY: both strings outlive the call, which copies what it keeps.
             let status = unsafe {
@@ -128,18 +128,6 @@ mod platform {
         fn drop(&mut self) {
             // SAFETY: `self.0` came from a successful create and is released once.
             unsafe { IOPMAssertionRelease(self.0) };
-        }
-    }
-}
-
-#[cfg(not(any(windows, target_os = "macos")))]
-mod platform {
-    /// Nothing to hold: the app does not ship for other platforms yet.
-    pub struct Hold;
-
-    impl Hold {
-        pub fn acquire() -> Result<Self, String> {
-            Ok(Self)
         }
     }
 }

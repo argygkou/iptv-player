@@ -12,6 +12,8 @@
 //! main thread; see [`Native::start`] for why that matters.
 
 #[cfg(native)]
+mod awake;
+#[cfg(native)]
 mod mpv;
 #[cfg(windows)]
 mod surface;
@@ -367,6 +369,12 @@ impl Native {
             .await
             .map_err(AppError::Playback)?;
         mpv.observe_flag("fullscreen").map_err(AppError::Playback)?;
+        // Paused (also at the end of a movie) or nothing loaded: the display
+        // may sleep. Not `core-idle`, which also flips while buffering: losing
+        // the hold mid-stall would blank a screen idle past its timeout.
+        mpv.observe_flag("pause").map_err(AppError::Playback)?;
+        mpv.observe_flag("idle-active")
+            .map_err(AppError::Playback)?;
         // These would shut mpv down for good (mpv's default `q`, `Q`, `Ctrl+w` and
         // media keys); the app owns the player's lifetime.
         for key in ["q", "Q", "Ctrl+w", "CLOSE_WIN", "POWER", "STOP"] {
@@ -383,9 +391,25 @@ impl Native {
         let tracker = Arc::new(Tracker::default());
         let (events, app, window) = (mpv.clone(), app.clone(), window.clone());
         let track = tracker.clone();
+        // mpv hides the cursor in its own window on Windows; on macOS the
+        // view does, and entering fullscreen starts its timer.
+        #[cfg(target_os = "macos")]
+        let on_fullscreen = {
+            let surface = surface.clone();
+            move |fullscreen: bool| {
+                if fullscreen {
+                    surface.hide_cursor_later();
+                }
+            }
+        };
+        #[cfg(windows)]
+        let on_fullscreen = |_: bool| {};
         std::thread::Builder::new()
             .name("mpv-events".into())
-            .spawn(move || forward_events(&events, &track, &app, &window))
+            .spawn(move || {
+                let awake = awake::KeepAwake::new();
+                forward_events(&events, &track, &app, &window, &awake, on_fullscreen);
+            })
             .map_err(|err| AppError::Playback(err.to_string()))?;
         Ok(Self {
             mpv,
@@ -426,10 +450,18 @@ fn info_text() -> String {
 /// Embedded mpv cannot go fullscreen itself, so its `fullscreen` property
 /// (the OSC button, double-click, `f`, `Esc`) drives the app window instead.
 /// The page's guide is out of sight in fullscreen, so entering it shows the
-/// info banner, which `i` brings back.
+/// info banner, which `i` brings back. The display stays on while mpv plays.
 #[cfg(native)]
-fn forward_events(mpv: &mpv::Mpv, tracker: &Tracker, app: &AppHandle, window: &WebviewWindow) {
+fn forward_events(
+    mpv: &mpv::Mpv,
+    tracker: &Tracker,
+    app: &AppHandle,
+    window: &WebviewWindow,
+    awake: &awake::KeepAwake,
+    on_fullscreen: impl Fn(bool),
+) {
     use tauri::Emitter;
+    let (mut paused, mut idle) = (false, true);
     loop {
         match mpv.wait_event() {
             Some(mpv::Event::Shutdown) => break,
@@ -446,9 +478,18 @@ fn forward_events(mpv: &mpv::Mpv, tracker: &Tracker, app: &AppHandle, window: &W
             Some(mpv::Event::Flag(name, value)) if name == "fullscreen" => {
                 let _ = window.set_fullscreen(value);
                 let _ = app.emit("player://fullscreen", value);
+                on_fullscreen(value);
                 if value {
                     let _ = mpv.command(&["show-text", info_text().as_str(), INFO_DURATION]);
                 }
+            }
+            Some(mpv::Event::Flag(name, value)) if name == "pause" || name == "idle-active" => {
+                if name == "pause" {
+                    paused = value;
+                } else {
+                    idle = value;
+                }
+                awake.set(!paused && !idle);
             }
             _ => {}
         }
