@@ -1,3 +1,4 @@
+mod awake;
 mod catalogue;
 mod commands;
 mod epg;
@@ -16,6 +17,36 @@ use tauri::Manager;
 
 use crate::player::Player;
 use crate::state::AppState;
+
+/// Keeps the display on while the main window is fullscreen, however it got
+/// there (mpv's controls, `F`, the macOS green button). Entering and leaving
+/// fullscreen always resizes the window.
+fn keep_awake_in_fullscreen(app: &tauri::App) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    let Some(window) = app.get_webview_window("main") else {
+        log::warn!("no main window; the display may sleep in fullscreen");
+        return;
+    };
+    let awake = Arc::new(awake::KeepAwake::new());
+    let latest = Arc::new(AtomicU64::new(0));
+    let watched = window.clone();
+    window.on_window_event(move |event| {
+        if !matches!(event, tauri::WindowEvent::Resized(_)) {
+            return;
+        }
+        let (awake, latest, window) = (awake.clone(), latest.clone(), watched.clone());
+        let resize = latest.fetch_add(1, Ordering::SeqCst) + 1;
+        // Read the state off the main thread, once the resizes settle: the
+        // macOS fullscreen animation and a window drag send a burst of them.
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            if latest.load(Ordering::SeqCst) == resize {
+                awake.set(window.is_fullscreen().unwrap_or(false));
+            }
+        });
+    });
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -44,6 +75,7 @@ pub fn run() {
             }
             app.manage(Player::new(Some(library).filter(|path| path.is_file())));
             tauri::async_runtime::spawn(proxy::serve(listener, state));
+            keep_awake_in_fullscreen(app);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
