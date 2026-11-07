@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, linkedSignal } from '@angular/core';
+import { Component, computed, input, linkedSignal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { InView } from './in-view';
@@ -18,7 +18,6 @@ const PAGE_SIZE = 120;
 /** Poster grid that renders in pages as the user scrolls, for catalogues with thousands of titles. */
 @Component({
   selector: 'app-poster-grid',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, InView],
   template: `
     <div class="grid">

@@ -1,4 +1,4 @@
-import { computed, inject, Injectable, signal } from '@angular/core';
+import { computed, inject, signal, Service } from '@angular/core';
 
 import { LibraryStore } from '../library/library-store';
 import { CatalogueStore } from '../xtream/catalogue-store';
@@ -9,7 +9,7 @@ import { AccountInfo, Credentials, Profile, SignedIn } from '../xtream/xtream.mo
  * The signed-in account and the saved profiles. Passwords never reach the
  * frontend: the backend keeps them in the OS credential store.
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class SessionStore {
   private readonly api = inject(XtreamApi);
   private readonly library = inject(LibraryStore);

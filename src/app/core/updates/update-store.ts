@@ -1,4 +1,4 @@
-import { computed, inject, Injectable, signal } from '@angular/core';
+import { computed, inject, signal, Service } from '@angular/core';
 
 import { NativePlayback } from '../../shared/player/native-playback';
 import { Update, UpdaterApi } from './updater-api';
@@ -14,7 +14,7 @@ const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
  * Background checks fail silently, since being offline is normal; a check the
  * user asked for reports its error.
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class UpdateStore {
   private readonly api = inject(UpdaterApi);
   private readonly playback = inject(NativePlayback);

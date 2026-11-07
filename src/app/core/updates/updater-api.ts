@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Service } from '@angular/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { check, Update } from '@tauri-apps/plugin-updater';
@@ -6,7 +6,7 @@ import { check, Update } from '@tauri-apps/plugin-updater';
 export type { Update };
 
 /** Facade over the Tauri updater and process plugins, so `UpdateStore` can be tested without them. */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class UpdaterApi {
   currentVersion(): Promise<string> {
     return getVersion();

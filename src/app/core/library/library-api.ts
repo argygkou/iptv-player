@@ -1,11 +1,11 @@
-import { Injectable } from '@angular/core';
+import { Service } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 
 import { StreamKind } from '../xtream/xtream.models';
 import { CategoryPrefs, Library, LibraryItem, LibraryKind, Progress } from './library.models';
 
 /** The backend's library commands; each returns the updated library. */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class LibraryApi {
   get(): Promise<Library> {
     return invoke<Library>('library_get');

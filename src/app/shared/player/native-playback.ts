@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { signal, Service } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -25,7 +25,7 @@ export interface PlayerInfo {
  * overtaken by the `open()` that preceded it, and bounds updates only reach
  * the window while something is playing.
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class NativePlayback {
   /** Whether libmpv loaded; `false` in mock mode, off Windows, or with a broken DLL. */
   readonly available: Promise<boolean> = invoke<boolean>('player_available').catch(() => false);

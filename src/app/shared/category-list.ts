@@ -1,15 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  effect,
-  inject,
-  Injectable,
-  input,
-  output,
-  signal,
-} from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal, Service } from '@angular/core';
 
 import { LibraryStore } from '../core/library/library-store';
 import { CategoryPrefs } from '../core/library/library.models';
@@ -29,7 +19,7 @@ export interface ExtraCategory {
 }
 
 /** Which groups are open, kept while the app runs so pages can be switched. */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class CategoryListState {
   readonly expanded = signal<ReadonlySet<string>>(new Set());
 
@@ -59,7 +49,6 @@ interface ShownGroup extends CategoryGroup {
  */
 @Component({
   selector: 'app-category-list',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [NgTemplateOutlet],
   template: `
     <div class="header">

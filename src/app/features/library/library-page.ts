@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { LibraryStore } from '../../core/library/library-store';
@@ -50,7 +50,6 @@ interface Row {
 /** The user's own lists: what to continue, favourites, and recent channels. */
 @Component({
   selector: 'app-library-page',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink],
   templateUrl: './library-page.html',
   styleUrl: './library-page.scss',

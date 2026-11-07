@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { Component, computed, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { LibraryStore } from '../../core/library/library-store';
@@ -13,7 +13,6 @@ import { filterByName } from '../../shared/search';
 
 @Component({
   selector: 'app-series-page',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CatalogueRefresh, CategoryList, PosterGrid],
   template: `
     <app-category-list

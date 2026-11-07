@@ -1,6 +1,5 @@
 import { Location } from '@angular/common';
 import {
-  ChangeDetectionStrategy,
   Component,
   computed,
   effect,
@@ -25,7 +24,6 @@ import { VideoPlayer } from '../../shared/player/video-player';
 
 @Component({
   selector: 'app-movie-detail-page',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FavouriteButton, VideoPlayer],
   template: `
     <button type="button" class="back" (click)="location.back()">← Back</button>

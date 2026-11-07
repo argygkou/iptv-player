@@ -1,7 +1,7 @@
-import { DestroyRef, inject, Injectable, signal } from '@angular/core';
+import { DestroyRef, inject, signal, Service } from '@angular/core';
 
 /** App-wide "now", refreshed every 30 seconds for EPG progress bars. */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class Clock {
   private readonly current = signal(new Date());
   readonly now = this.current.asReadonly();

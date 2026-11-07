@@ -1,13 +1,4 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  effect,
-  ElementRef,
-  input,
-  signal,
-  untracked,
-  viewChild,
-} from '@angular/core';
+import { Component, effect, ElementRef, input, signal, untracked, viewChild } from '@angular/core';
 import type Mpegts from 'mpegts.js';
 
 import { Progress } from '../../core/library/library.models';
@@ -43,7 +34,6 @@ const LIVE_CONFIG: Mpegts.Config = {
 
 @Component({
   selector: 'app-web-video-player',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <video #video controls autoplay playsinline></video>
     @if (error(); as message) {

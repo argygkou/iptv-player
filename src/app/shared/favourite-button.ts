@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
 
 import { LibraryStore } from '../core/library/library-store';
 import { LibraryItem } from '../core/library/library.models';
@@ -6,7 +6,6 @@ import { LibraryItem } from '../core/library/library.models';
 /** Star that adds the item to, or removes it from, the favourites. */
 @Component({
   selector: 'app-favourite-button',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <button
       type="button"

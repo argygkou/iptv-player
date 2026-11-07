@@ -1,13 +1,5 @@
 import { DatePipe } from '@angular/common';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  input,
-  resource,
-  signal,
-} from '@angular/core';
+import { Component, computed, inject, input, resource, signal } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { LibraryStore } from '../../core/library/library-store';
@@ -56,7 +48,6 @@ export function programmeAction(
 
 @Component({
   selector: 'app-guide-page',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DatePipe],
   templateUrl: './guide-page.html',
   styleUrl: './guide-page.scss',

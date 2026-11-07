@@ -1,13 +1,4 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  effect,
-  inject,
-  input,
-  resource,
-  untracked,
-} from '@angular/core';
+import { Component, computed, effect, inject, input, resource, untracked } from '@angular/core';
 
 import { LibraryStore } from '../../core/library/library-store';
 import { LibraryItem, Progress } from '../../core/library/library.models';
@@ -23,7 +14,6 @@ import { WebVideoPlayer } from './web-video-player';
  */
 @Component({
   selector: 'app-video-player',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [NativeVideoPlayer, WebVideoPlayer],
   template: `
     @if (native.hasValue()) {

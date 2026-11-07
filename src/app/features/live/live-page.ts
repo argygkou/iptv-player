@@ -1,7 +1,6 @@
 import { DatePipe, formatDate } from '@angular/common';
 import {
   afterRenderEffect,
-  ChangeDetectionStrategy,
   Component,
   computed,
   ElementRef,
@@ -51,7 +50,6 @@ const CHANNEL_PAGE = 200;
 
 @Component({
   selector: 'app-live-page',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CatalogueRefresh, CategoryList, FavouriteButton, InView, VideoPlayer, DatePipe],
   templateUrl: './live-page.html',
   styleUrls: ['../../shared/catalogue-layout.scss', './live-page.scss'],
