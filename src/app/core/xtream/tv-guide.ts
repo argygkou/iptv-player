@@ -1,4 +1,4 @@
-import { inject, Injectable, signal } from '@angular/core';
+import { inject, Service, signal } from '@angular/core';
 
 import { mapWithConcurrency } from '../../shared/concurrency';
 import { XtreamApi } from './xtream-api';
@@ -18,7 +18,7 @@ const FULL_GUIDE_WAIT = 4000;
  * guide does not cover (no `epg_channel_id`, or a panel without `xmltv.php`)
  * fall back to short EPG, which only lists what is on now and next.
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class TvGuide {
   private readonly api = inject(XtreamApi);
 

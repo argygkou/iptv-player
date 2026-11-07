@@ -1,4 +1,4 @@
-import { computed, inject, Injectable, signal } from '@angular/core';
+import { computed, inject, Service, signal } from '@angular/core';
 
 import { XtreamApi } from './xtream-api';
 import { CatalogueListName, Category, LiveStream, SeriesItem, VodStream } from './xtream.models';
@@ -120,7 +120,7 @@ export class CachedList<T> {
  * account. Lists load on first use; the session resets them when the account
  * changes.
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class CatalogueStore {
   private readonly api = inject(XtreamApi);
 

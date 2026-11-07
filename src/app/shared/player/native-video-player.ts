@@ -1,5 +1,4 @@
 import {
-  ChangeDetectionStrategy,
   Component,
   computed,
   DestroyRef,
@@ -26,7 +25,6 @@ import { PROGRESS_INTERVAL } from './progress';
  */
 @Component({
   selector: 'app-native-video-player',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '[class.fullscreen]': 'playback.fullscreen()' },
   template: `
     @if (message(); as message) {

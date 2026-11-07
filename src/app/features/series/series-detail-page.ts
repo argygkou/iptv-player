@@ -1,6 +1,5 @@
 import { Location } from '@angular/common';
 import {
-  ChangeDetectionStrategy,
   Component,
   computed,
   effect,
@@ -57,7 +56,6 @@ interface Playing {
 
 @Component({
   selector: 'app-series-detail-page',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FavouriteButton, VideoPlayer],
   templateUrl: './series-detail-page.html',
   styleUrls: ['../movies/detail.scss', './series-detail-page.scss'],

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Service } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 
 import { fromGuide, toProgramme } from './epg';
@@ -31,7 +31,7 @@ interface Query {
  * cached for the session; the category and stream lists are cached on disk by
  * the backend (see `CatalogueStore`); EPG is not cached here.
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class XtreamApi {
   private readonly cache = new Map<string, Promise<unknown>>();
 

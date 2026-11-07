@@ -1,5 +1,5 @@
 import { DatePipe, PercentPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { SessionStore } from '../../core/session/session-store';
@@ -7,7 +7,6 @@ import { UpdateStore } from '../../core/updates/update-store';
 
 @Component({
   selector: 'app-shell',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterOutlet, RouterLink, RouterLinkActive, DatePipe, PercentPipe],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',

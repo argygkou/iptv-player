@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { Component, computed, input } from '@angular/core';
 
 import { CachedList } from '../core/xtream/catalogue-store';
 
@@ -10,7 +10,6 @@ import { CachedList } from '../core/xtream/catalogue-store';
  */
 @Component({
   selector: 'app-catalogue-refresh',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DatePipe],
   template: `
     <button

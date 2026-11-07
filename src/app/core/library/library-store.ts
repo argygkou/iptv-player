@@ -1,4 +1,4 @@
-import { computed, inject, Injectable, signal } from '@angular/core';
+import { computed, inject, Service, signal } from '@angular/core';
 
 import { StreamKind } from '../xtream/xtream.models';
 import { LibraryApi } from './library-api';
@@ -21,7 +21,7 @@ import {
  * on sign-in and clears it on sign-out; every change is saved by the backend,
  * which answers with the whole library.
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class LibraryStore {
   private readonly api = inject(LibraryApi);
   private readonly data = signal<Library>(EMPTY_LIBRARY);
