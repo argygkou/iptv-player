@@ -1,4 +1,4 @@
-import { computed, inject, signal, Service } from '@angular/core';
+import { computed, inject, Service, signal } from '@angular/core';
 
 import { XtreamApi } from './xtream-api';
 import { CatalogueListName, Category, LiveStream, SeriesItem, VodStream } from './xtream.models';

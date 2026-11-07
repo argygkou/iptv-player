@@ -1,4 +1,4 @@
-import { computed, inject, signal, Service } from '@angular/core';
+import { computed, inject, Service, signal } from '@angular/core';
 
 import { LibraryStore } from '../library/library-store';
 import { CatalogueStore } from '../xtream/catalogue-store';

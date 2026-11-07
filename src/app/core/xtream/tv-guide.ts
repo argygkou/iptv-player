@@ -1,4 +1,4 @@
-import { inject, signal, Service } from '@angular/core';
+import { inject, Service, signal } from '@angular/core';
 
 import { mapWithConcurrency } from '../../shared/concurrency';
 import { XtreamApi } from './xtream-api';

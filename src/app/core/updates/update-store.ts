@@ -1,4 +1,4 @@
-import { computed, inject, signal, Service } from '@angular/core';
+import { computed, inject, Service, signal } from '@angular/core';
 
 import { NativePlayback } from '../../shared/player/native-playback';
 import { Update, UpdaterApi } from './updater-api';

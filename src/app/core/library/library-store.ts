@@ -1,4 +1,4 @@
-import { computed, inject, signal, Service } from '@angular/core';
+import { computed, inject, Service, signal } from '@angular/core';
 
 import { StreamKind } from '../xtream/xtream.models';
 import { LibraryApi } from './library-api';

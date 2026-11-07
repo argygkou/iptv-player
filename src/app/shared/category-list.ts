@@ -1,5 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { Component, computed, effect, inject, input, output, signal, Service } from '@angular/core';
+import { Component, computed, effect, inject, input, output, Service, signal } from '@angular/core';
 
 import { LibraryStore } from '../core/library/library-store';
 import { CategoryPrefs } from '../core/library/library.models';

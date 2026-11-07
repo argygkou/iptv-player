@@ -1,4 +1,4 @@
-import { DestroyRef, inject, signal, Service } from '@angular/core';
+import { DestroyRef, inject, Service, signal } from '@angular/core';
 
 /** App-wide "now", refreshed every 30 seconds for EPG progress bars. */
 @Service()

@@ -1,4 +1,4 @@
-import { signal, Service } from '@angular/core';
+import { Service, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
