@@ -28,8 +28,11 @@ import { describeFailure, StreamState } from './stream-retry';
     :host {
       display: contents;
     }
+    /* Not \`display: none\`, which would take the live region out of the
+       accessibility tree and lose the first announcement. */
     .retrying:empty {
-      display: none;
+      padding: 0;
+      background: none;
     }
     .retrying,
     .failed {

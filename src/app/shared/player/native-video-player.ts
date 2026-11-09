@@ -105,10 +105,17 @@ export class NativeVideoPlayer {
           })
           .catch(() => null);
       const watch = setInterval(sample, WATCH_INTERVAL);
+      // Only new positions: after a failure or while paused, there is nothing to save.
+      let saved: Progress | null = null;
       const save =
         live || !report
           ? undefined
-          : setInterval(() => this.latest && report(this.latest), PROGRESS_INTERVAL);
+          : setInterval(() => {
+              if (this.latest && this.latest !== saved) {
+                saved = this.latest;
+                report(saved);
+              }
+            }, PROGRESS_INTERVAL);
       finish = () => {
         finish = undefined;
         current = false;
