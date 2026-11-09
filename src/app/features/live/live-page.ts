@@ -33,6 +33,7 @@ import { LiveStream, Programme } from '../../core/xtream/xtream.models';
 import { CatalogueRefresh } from '../../shared/catalogue-refresh';
 import { hiddenCategoryIds, withoutHidden } from '../../shared/category-groups';
 import { CategoryList } from '../../shared/category-list';
+import { ClearHistory } from '../../shared/clear-history';
 import { FavouriteButton } from '../../shared/favourite-button';
 import { Clock } from '../../shared/clock';
 import { InView } from '../../shared/in-view';
@@ -50,7 +51,15 @@ const CHANNEL_PAGE = 200;
 
 @Component({
   selector: 'app-live-page',
-  imports: [CatalogueRefresh, CategoryList, FavouriteButton, InView, VideoPlayer, DatePipe],
+  imports: [
+    CatalogueRefresh,
+    CategoryList,
+    ClearHistory,
+    FavouriteButton,
+    InView,
+    VideoPlayer,
+    DatePipe,
+  ],
   templateUrl: './live-page.html',
   styleUrls: ['../../shared/catalogue-layout.scss', './live-page.scss'],
 })
@@ -75,6 +84,7 @@ export class LivePage {
   protected readonly search = signal('');
   protected readonly extras = [FAVOURITES, RECENT];
   protected readonly favouritesId = FAVOURITES.id;
+  protected readonly recentId = RECENT.id;
 
   protected readonly categories = this.catalogue.liveCategories.load();
   /** Every channel; the categories and the saved lists pick from it. */

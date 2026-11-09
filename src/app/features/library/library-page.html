@@ -1,8 +1,13 @@
-<h1>My List</h1>
+<h1 tabindex="-1">My List</h1>
 
 @for (row of rows(); track row.title) {
-  <section>
-    <h2>{{ row.title }}</h2>
+  <section [attr.aria-labelledby]="'row-' + $index">
+    <header>
+      <h2 [id]="'row-' + $index">{{ row.title }}</h2>
+      @if (row.history; as history) {
+        <app-clear-history [list]="row.title" [items]="history" (cleared)="focusHeading()" />
+      }
+    </header>
     <ul class="row">
       @for (card of row.cards; track card.key) {
         <li [class.wide]="card.wide" [class.logo]="card.logo">
@@ -22,7 +27,7 @@
               <small>{{ card.subtitle }}</small>
             }
           </a>
-          @if (row.removable) {
+          @if (row.history) {
             <button
               type="button"
               class="remove"

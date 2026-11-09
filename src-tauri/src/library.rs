@@ -47,6 +47,13 @@ pub struct Item {
     pub series_name: Option<String>,
 }
 
+/// Names a history entry without the rest of its item.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ItemRef {
+    pub kind: ItemKind,
+    pub id: String,
+}
+
 impl Item {
     fn is(&self, kind: ItemKind, id: &str) -> bool {
         self.kind == kind && self.id == id
@@ -178,8 +185,9 @@ impl Library {
         self.history.truncate(HISTORY_LIMIT);
     }
 
-    fn forget(&mut self, kind: ItemKind, id: &str) {
-        self.history.retain(|w| !w.item.is(kind, id));
+    fn forget(&mut self, items: &[ItemRef]) {
+        self.history
+            .retain(|w| !items.iter().any(|r| w.item.is(r.kind, &r.id)));
     }
 
     fn set_categories(&mut self, catalogue: Catalogue, prefs: CategoryPrefs) {
@@ -273,8 +281,9 @@ impl LibraryStore {
         self.update(|data| data.record(item, position, duration, now()))
     }
 
-    pub fn forget(&self, kind: ItemKind, id: &str) -> AppResult<Library> {
-        self.update(|data| data.forget(kind, id))
+    /// Takes the items off the history, saving once however many there are.
+    pub fn forget(&self, items: &[ItemRef]) -> AppResult<Library> {
+        self.update(|data| data.forget(items))
     }
 
     pub fn set_categories(&self, catalogue: Catalogue, prefs: CategoryPrefs) -> AppResult<Library> {
@@ -414,8 +423,30 @@ mod tests {
         library.record(item(ItemKind::Movie, "1"), Some(f64::NAN), Some(5400.0), 4);
         assert_eq!(library.history[0].position, 600.0);
 
-        library.forget(ItemKind::Movie, "1");
+        library.forget(&[ItemRef {
+            kind: ItemKind::Movie,
+            id: "1".into(),
+        }]);
         assert_eq!(library.history[0].item.kind, ItemKind::Live);
+    }
+
+    #[test]
+    fn forgets_several_items_at_once() {
+        let mut library = Library::default();
+        for (kind, id) in [
+            (ItemKind::Movie, "1"),
+            (ItemKind::Episode, "2"),
+            (ItemKind::Live, "1"),
+        ] {
+            library.record(item(kind, id), Some(600.0), Some(5400.0), 1);
+        }
+        let refs = [(ItemKind::Movie, "1"), (ItemKind::Episode, "2")].map(|(kind, id)| ItemRef {
+            kind,
+            id: id.into(),
+        });
+        library.forget(&refs);
+        let left: Vec<_> = library.history.iter().map(|w| w.item.kind).collect();
+        assert_eq!(left, [ItemKind::Live]);
     }
 
     #[test]

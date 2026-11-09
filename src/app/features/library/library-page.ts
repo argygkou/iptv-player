@@ -1,8 +1,9 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, ElementRef, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { LibraryStore } from '../../core/library/library-store';
 import { LibraryItem, Watched, watchedFraction } from '../../core/library/library.models';
+import { ClearHistory } from '../../shared/clear-history';
 import { FAVOURITES, RECENT } from '../../shared/saved-lists';
 
 /** Where an item opens: its detail page, or the channel on the Live TV page. */
@@ -43,42 +44,51 @@ interface Card {
 interface Row {
   title: string;
   cards: Card[];
-  /** Whether cards can be taken off the row (history rows). */
-  removable: boolean;
+  /**
+   * For history rows: what the row lists, which can be taken off one by one
+   * or all at once. `null` for favourites.
+   */
+  history: readonly Watched[] | null;
 }
 
 /** The user's own lists: what to continue, favourites, and recent channels. */
 @Component({
   selector: 'app-library-page',
-  imports: [RouterLink],
+  imports: [ClearHistory, RouterLink],
   templateUrl: './library-page.html',
   styleUrl: './library-page.scss',
 })
 export class LibraryPage {
   private readonly library = inject(LibraryStore);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly rows = computed<Row[]>(() => {
-    const favourites = (kind: LibraryItem['kind']) =>
-      this.library.favouritesOf(kind).map((item) => card(item));
+    const favourites = (title: string, kind: LibraryItem['kind']): Row => ({
+      title,
+      cards: this.library.favouritesOf(kind).map((item) => card(item)),
+      history: null,
+    });
+    const history = (title: string, watched: Watched[]): Row => ({
+      title,
+      cards: watched.map((w) => card(w, w)),
+      history: watched,
+    });
     return [
-      {
-        title: 'Continue watching',
-        cards: this.library.continueWatching().map((w) => card(w, w)),
-        removable: true,
-      },
-      { title: 'Favourite channels', cards: favourites('live'), removable: false },
-      { title: 'Favourite movies', cards: favourites('movie'), removable: false },
-      { title: 'Favourite series', cards: favourites('series'), removable: false },
-      {
-        title: 'Recently watched channels',
-        cards: this.library.recentChannels().map((w) => card(w, w)),
-        removable: true,
-      },
+      history('Continue watching', this.library.continueWatching()),
+      favourites('Favourite channels', 'live'),
+      favourites('Favourite movies', 'movie'),
+      favourites('Favourite series', 'series'),
+      history('Recently watched channels', this.library.recentChannels()),
     ].filter((row) => row.cards.length > 0);
   });
 
   protected forget(item: LibraryItem): void {
-    void this.library.forget(item.kind, item.id);
+    void this.library.forget([item]);
+  }
+
+  /** A cleared row goes away, so focus moves to the page heading. */
+  protected focusHeading(): void {
+    this.host.nativeElement.querySelector('h1')?.focus();
   }
 }
 

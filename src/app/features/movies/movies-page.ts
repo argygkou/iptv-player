@@ -5,6 +5,7 @@ import { LibraryStore } from '../../core/library/library-store';
 import { LibraryItem, watchedFraction } from '../../core/library/library.models';
 import { CatalogueStore, inCategory } from '../../core/xtream/catalogue-store';
 import { CatalogueRefresh } from '../../shared/catalogue-refresh';
+import { ClearHistory } from '../../shared/clear-history';
 import { hiddenCategoryIds, withoutHidden } from '../../shared/category-groups';
 import { CategoryList } from '../../shared/category-list';
 import { PosterGrid, PosterItem } from '../../shared/poster-grid';
@@ -13,7 +14,7 @@ import { filterByName } from '../../shared/search';
 
 @Component({
   selector: 'app-movies-page',
-  imports: [CatalogueRefresh, CategoryList, PosterGrid],
+  imports: [CatalogueRefresh, CategoryList, ClearHistory, PosterGrid],
   template: `
     <app-category-list
       kind="movie"
@@ -27,12 +28,20 @@ import { filterByName } from '../../shared/search';
     <section class="content">
       <div class="toolbar">
         <input
+          #searchBox
           type="search"
           placeholder="Search movies"
           [value]="search()"
           (input)="search.set($any($event.target).value)"
         />
         <span class="count">{{ items().length }} titles</span>
+        @if (continuing(); as continuing) {
+          <app-clear-history
+            list="Continue watching"
+            [items]="continuing"
+            (cleared)="searchBox.focus()"
+          />
+        }
       </div>
       <div class="scroll">
         @if (saved(); as saved) {
@@ -61,6 +70,12 @@ export class MoviesPage {
   protected readonly categories = this.catalogue.movieCategories.load();
   protected readonly movies = this.catalogue.movies.load();
   protected readonly lists = [this.categories, this.movies];
+  /** What "Continue watching" holds, when that list is selected. */
+  protected readonly continuing = computed(() =>
+    this.category() === CONTINUE.id
+      ? this.library.continueWatching().filter((w) => w.kind === 'movie')
+      : null,
+  );
   /** "All" leaves out the categories the user hid. */
   private readonly listed = computed(() => {
     const category = this.category();
@@ -81,7 +96,7 @@ export class MoviesPage {
       category === FAVOURITES.id
         ? this.library.favouritesOf('movie')
         : category === CONTINUE.id
-          ? this.library.continueWatching().filter((w) => w.kind === 'movie')
+          ? (this.continuing() ?? [])
           : null;
     return (
       items &&
