@@ -9,6 +9,7 @@ use crate::epg::EpgStore;
 use crate::error::{AppError, AppResult};
 use crate::library::LibraryStore;
 use crate::profiles::ProfileStore;
+use crate::proxy::UpstreamFailures;
 use crate::xtream::Credentials;
 
 /// Many panels only serve known player user agents, so identify as a common one.
@@ -30,6 +31,8 @@ pub struct AppState {
     /// Required on every proxy request so other local processes or web pages
     /// cannot use the relay.
     pub proxy_token: String,
+    /// Streams the panel refused or failed to serve, for playback errors.
+    pub upstream_failures: UpstreamFailures,
 }
 
 impl AppState {
@@ -49,6 +52,7 @@ impl AppState {
             data_dir,
             proxy_port,
             proxy_token: random_hex(16),
+            upstream_failures: UpstreamFailures::default(),
         }
     }
 

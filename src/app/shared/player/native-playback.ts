@@ -4,11 +4,14 @@ import { listen } from '@tauri-apps/api/event';
 
 import { Progress } from '../../core/library/library.models';
 import { Bounds } from './bounds';
+import { StreamFailure } from './stream-retry';
 
 interface PlaybackError {
   /** The `open()` call the failing stream belongs to. */
   generation: number;
   message: string;
+  /** The panel's HTTP status, when it refused or failed to serve the stream. */
+  status: number | null;
 }
 
 /** What mpv shows about the stream, as the page is out of sight in fullscreen. */
@@ -33,7 +36,7 @@ export class NativePlayback {
   /** Set when mpv's controls (button, double-click, F, Esc) toggle fullscreen. */
   readonly fullscreen = signal(false);
   /** The last error mpv reported for the current stream. */
-  readonly error = signal<string | null>(null);
+  readonly error = signal<StreamFailure | null>(null);
 
   private queue: Promise<unknown> = Promise.resolve();
   private playing = false;
@@ -104,7 +107,7 @@ export class NativePlayback {
       if (payload.generation !== this.generation) {
         return;
       }
-      this.error.set(payload.message);
+      this.error.set({ message: payload.message, status: payload.status });
       // Hide the video window so the message underneath is visible.
       void this.stop();
     });
