@@ -11,12 +11,20 @@
 <section class="content channels">
   <div class="toolbar">
     <input
+      #searchBox
       type="search"
       placeholder="Search channels"
       [value]="search()"
       (input)="search.set($any($event.target).value)"
     />
     <span class="count">{{ visibleStreams().length }}</span>
+    @if (category() === recentId) {
+      <app-clear-history
+        list="Recently watched"
+        [items]="library.recentChannels()"
+        (cleared)="searchBox.focus()"
+      />
+    }
   </div>
   <ul class="scroll">
     @if (streams.isLoading()) {

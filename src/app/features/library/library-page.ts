@@ -1,16 +1,9 @@
-import {
-  afterNextRender,
-  Component,
-  computed,
-  ElementRef,
-  inject,
-  Injector,
-  signal,
-} from '@angular/core';
+import { Component, computed, ElementRef, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { LibraryStore } from '../../core/library/library-store';
 import { LibraryItem, Watched, watchedFraction } from '../../core/library/library.models';
+import { ClearHistory } from '../../shared/clear-history';
 import { FAVOURITES, RECENT } from '../../shared/saved-lists';
 
 /** Where an item opens: its detail page, or the channel on the Live TV page. */
@@ -49,7 +42,6 @@ interface Card {
 }
 
 interface Row {
-  /** Also the row's identity. */
   title: string;
   cards: Card[];
   /** Whether cards can be taken off the row, one by one or all at once (history rows). */
@@ -59,17 +51,13 @@ interface Row {
 /** The user's own lists: what to continue, favourites, and recent channels. */
 @Component({
   selector: 'app-library-page',
-  imports: [RouterLink],
+  imports: [ClearHistory, RouterLink],
   templateUrl: './library-page.html',
   styleUrl: './library-page.scss',
 })
 export class LibraryPage {
   private readonly library = inject(LibraryStore);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private readonly injector = inject(Injector);
-
-  /** The row whose "Clear" is waiting to be confirmed. */
-  protected readonly confirming = signal<string | null>(null);
 
   protected readonly rows = computed<Row[]>(() => {
     const favourites = (kind: LibraryItem['kind']) =>
@@ -95,31 +83,13 @@ export class LibraryPage {
     void this.library.forget([item]);
   }
 
-  /** Asks first, with focus on Cancel so a stray Enter clears nothing. */
-  protected askToClear(row: Row): void {
-    this.confirming.set(row.title);
-    this.focusAfterRender('.confirm .cancel');
+  protected items(row: Row): LibraryItem[] {
+    return row.cards.map((c) => c.item);
   }
 
-  protected cancelClear(): void {
-    const title = this.confirming();
-    this.confirming.set(null);
-    if (title !== null) {
-      this.focusAfterRender(`button.clear[data-row="${CSS.escape(title)}"]`);
-    }
-  }
-
-  /** The row goes away with its cards, so focus moves to the page heading. */
-  protected clear(row: Row): void {
-    this.confirming.set(null);
-    void this.library.forget(row.cards.map((c) => c.item));
-    this.focusAfterRender('h1');
-  }
-
-  private focusAfterRender(selector: string): void {
-    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus(), {
-      injector: this.injector,
-    });
+  /** A cleared row goes away, so focus moves to the page heading. */
+  protected focusHeading(): void {
+    this.host.nativeElement.querySelector('h1')?.focus();
   }
 }
 

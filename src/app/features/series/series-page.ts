@@ -5,6 +5,7 @@ import { LibraryStore } from '../../core/library/library-store';
 import { watchedFraction } from '../../core/library/library.models';
 import { CatalogueStore, inCategory } from '../../core/xtream/catalogue-store';
 import { CatalogueRefresh } from '../../shared/catalogue-refresh';
+import { ClearHistory } from '../../shared/clear-history';
 import { hiddenCategoryIds, withoutHidden } from '../../shared/category-groups';
 import { CategoryList } from '../../shared/category-list';
 import { PosterGrid, PosterItem } from '../../shared/poster-grid';
@@ -13,7 +14,7 @@ import { filterByName } from '../../shared/search';
 
 @Component({
   selector: 'app-series-page',
-  imports: [CatalogueRefresh, CategoryList, PosterGrid],
+  imports: [CatalogueRefresh, CategoryList, ClearHistory, PosterGrid],
   template: `
     <app-category-list
       kind="series"
@@ -27,12 +28,20 @@ import { filterByName } from '../../shared/search';
     <section class="content">
       <div class="toolbar">
         <input
+          #searchBox
           type="search"
           placeholder="Search series"
           [value]="search()"
           (input)="search.set($any($event.target).value)"
         />
         <span class="count">{{ items().length }} shows</span>
+        @if (continuing(); as continuing) {
+          <app-clear-history
+            list="Continue watching"
+            [items]="continuing"
+            (cleared)="searchBox.focus()"
+          />
+        }
       </div>
       <div class="scroll">
         @if (saved(); as saved) {
@@ -61,6 +70,12 @@ export class SeriesPage {
   protected readonly categories = this.catalogue.seriesCategories.load();
   protected readonly series = this.catalogue.series.load();
   protected readonly lists = [this.categories, this.series];
+  /** What "Continue watching" holds, when that list is selected. */
+  protected readonly continuing = computed(() =>
+    this.category() === CONTINUE.id
+      ? this.library.continueWatching().filter((w) => w.kind === 'episode' && w.seriesId)
+      : null,
+  );
   /** "All" leaves out the categories the user hid. */
   private readonly listed = computed(() => {
     const category = this.category();
@@ -85,10 +100,7 @@ export class SeriesPage {
           link: ['/series', s.id],
         }));
       case CONTINUE.id:
-        return filterByName(
-          this.library.continueWatching().filter((w) => w.kind === 'episode' && w.seriesId),
-          this.search(),
-        ).map((episode) => ({
+        return filterByName(this.continuing() ?? [], this.search()).map((episode) => ({
           id: episode.id,
           name: `${episode.seriesName ?? ''} · ${episode.name}`,
           image: episode.image,
