@@ -1,6 +1,6 @@
 [package]
 name = "infinite-iptv"
-version = "0.2.1"
+version = "0.3.0"
 description = "Desktop IPTV player for Xtream Codes providers"
 authors = ["Argyris"]
 license = ""

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/argygkou/iptv-player/compare/v0.2.1...v0.3.0) (2026-11-09)
+
+
+### Features
+
+* retry failed streams automatically before asking the user ([#21](https://github.com/argygkou/iptv-player/issues/21)) ([9420072](https://github.com/argygkou/iptv-player/commit/942007242a3337467b1e97f6b2d5e31420832882))
+
 ## [0.2.1](https://github.com/argygkou/iptv-player/compare/v0.2.0...v0.2.1) (2026-11-02)
 
 
