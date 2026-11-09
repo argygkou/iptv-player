@@ -4,8 +4,8 @@
   <section [attr.aria-labelledby]="'row-' + $index">
     <header>
       <h2 [id]="'row-' + $index">{{ row.title }}</h2>
-      @if (row.removable) {
-        <app-clear-history [list]="row.title" [items]="items(row)" (cleared)="focusHeading()" />
+      @if (row.history; as history) {
+        <app-clear-history [list]="row.title" [items]="history" (cleared)="focusHeading()" />
       }
     </header>
     <ul class="row">
@@ -27,7 +27,7 @@
               <small>{{ card.subtitle }}</small>
             }
           </a>
-          @if (row.removable) {
+          @if (row.history) {
             <button
               type="button"
               class="remove"

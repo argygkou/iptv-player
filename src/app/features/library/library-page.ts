@@ -44,8 +44,11 @@ interface Card {
 interface Row {
   title: string;
   cards: Card[];
-  /** Whether cards can be taken off the row, one by one or all at once (history rows). */
-  removable: boolean;
+  /**
+   * For history rows: what the row lists, which can be taken off one by one
+   * or all at once. `null` for favourites.
+   */
+  history: readonly Watched[] | null;
 }
 
 /** The user's own lists: what to continue, favourites, and recent channels. */
@@ -60,31 +63,27 @@ export class LibraryPage {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly rows = computed<Row[]>(() => {
-    const favourites = (kind: LibraryItem['kind']) =>
-      this.library.favouritesOf(kind).map((item) => card(item));
+    const favourites = (title: string, kind: LibraryItem['kind']): Row => ({
+      title,
+      cards: this.library.favouritesOf(kind).map((item) => card(item)),
+      history: null,
+    });
+    const history = (title: string, watched: Watched[]): Row => ({
+      title,
+      cards: watched.map((w) => card(w, w)),
+      history: watched,
+    });
     return [
-      {
-        title: 'Continue watching',
-        cards: this.library.continueWatching().map((w) => card(w, w)),
-        removable: true,
-      },
-      { title: 'Favourite channels', cards: favourites('live'), removable: false },
-      { title: 'Favourite movies', cards: favourites('movie'), removable: false },
-      { title: 'Favourite series', cards: favourites('series'), removable: false },
-      {
-        title: 'Recently watched channels',
-        cards: this.library.recentChannels().map((w) => card(w, w)),
-        removable: true,
-      },
+      history('Continue watching', this.library.continueWatching()),
+      favourites('Favourite channels', 'live'),
+      favourites('Favourite movies', 'movie'),
+      favourites('Favourite series', 'series'),
+      history('Recently watched channels', this.library.recentChannels()),
     ].filter((row) => row.cards.length > 0);
   });
 
   protected forget(item: LibraryItem): void {
     void this.library.forget([item]);
-  }
-
-  protected items(row: Row): LibraryItem[] {
-    return row.cards.map((c) => c.item);
   }
 
   /** A cleared row goes away, so focus moves to the page heading. */
