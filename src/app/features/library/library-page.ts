@@ -1,4 +1,12 @@
-import { Component, computed, inject } from '@angular/core';
+import {
+  afterNextRender,
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  Injector,
+  signal,
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { LibraryStore } from '../../core/library/library-store';
@@ -41,9 +49,10 @@ interface Card {
 }
 
 interface Row {
+  /** Also the row's identity. */
   title: string;
   cards: Card[];
-  /** Whether cards can be taken off the row (history rows). */
+  /** Whether cards can be taken off the row, one by one or all at once (history rows). */
   removable: boolean;
 }
 
@@ -56,6 +65,11 @@ interface Row {
 })
 export class LibraryPage {
   private readonly library = inject(LibraryStore);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+
+  /** The row whose "Clear" is waiting to be confirmed. */
+  protected readonly confirming = signal<string | null>(null);
 
   protected readonly rows = computed<Row[]>(() => {
     const favourites = (kind: LibraryItem['kind']) =>
@@ -78,7 +92,34 @@ export class LibraryPage {
   });
 
   protected forget(item: LibraryItem): void {
-    void this.library.forget(item.kind, item.id);
+    void this.library.forget([item]);
+  }
+
+  /** Asks first, with focus on Cancel so a stray Enter clears nothing. */
+  protected askToClear(row: Row): void {
+    this.confirming.set(row.title);
+    this.focusAfterRender('.confirm .cancel');
+  }
+
+  protected cancelClear(): void {
+    const title = this.confirming();
+    this.confirming.set(null);
+    if (title !== null) {
+      this.focusAfterRender(`button.clear[data-row="${CSS.escape(title)}"]`);
+    }
+  }
+
+  /** The row goes away with its cards, so focus moves to the page heading. */
+  protected clear(row: Row): void {
+    this.confirming.set(null);
+    void this.library.forget(row.cards.map((c) => c.item));
+    this.focusAfterRender('h1');
+  }
+
+  private focusAfterRender(selector: string): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus(), {
+      injector: this.injector,
+    });
   }
 }
 

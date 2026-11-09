@@ -2,7 +2,7 @@ import { Service } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 
 import { StreamKind } from '../xtream/xtream.models';
-import { CategoryPrefs, Library, LibraryItem, LibraryKind, Progress } from './library.models';
+import { CategoryPrefs, Library, LibraryItem, Progress } from './library.models';
 
 /** The backend's library commands; each returns the updated library. */
 @Service()
@@ -23,8 +23,10 @@ export class LibraryApi {
     });
   }
 
-  forget(kind: LibraryKind, id: string): Promise<Library> {
-    return invoke<Library>('library_forget', { kind, id });
+  forget(items: readonly LibraryItem[]): Promise<Library> {
+    return invoke<Library>('library_forget', {
+      items: items.map(({ kind, id }) => ({ kind, id })),
+    });
   }
 
   setCategories(catalogue: StreamKind, prefs: CategoryPrefs): Promise<Library> {

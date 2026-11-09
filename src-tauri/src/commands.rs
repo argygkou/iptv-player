@@ -8,7 +8,7 @@ use tauri::State;
 use crate::catalogue::{List, Snapshot};
 use crate::epg::Programme;
 use crate::error::{AppError, AppResult};
-use crate::library::{Catalogue, CategoryPrefs, Item, ItemKind, Library};
+use crate::library::{Catalogue, CategoryPrefs, Item, ItemRef, Library};
 use crate::profiles::Profile;
 use crate::proxy::parse_file;
 use crate::secrets;
@@ -241,13 +241,10 @@ pub fn library_record(
     state.library.record(item, position, duration)
 }
 
+/// Takes the items off the watch history (one card, or a whole row).
 #[tauri::command]
-pub fn library_forget(
-    state: State<'_, Arc<AppState>>,
-    kind: ItemKind,
-    id: String,
-) -> AppResult<Library> {
-    state.library.forget(kind, &id)
+pub fn library_forget(state: State<'_, Arc<AppState>>, items: Vec<ItemRef>) -> AppResult<Library> {
+    state.library.forget(&items)
 }
 
 /// Replaces how the catalogue's categories are pinned and hidden.

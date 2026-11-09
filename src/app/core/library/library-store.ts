@@ -107,8 +107,12 @@ export class LibraryStore {
     return this.apply(this.session, () => this.api.record(item, progress));
   }
 
-  forget(kind: LibraryKind, id: string): Promise<void> {
-    return this.apply(this.session, () => this.api.forget(kind, id));
+  /** Takes the items off the history: one card, or a whole row. */
+  forget(items: readonly LibraryItem[]): Promise<void> {
+    if (items.length === 0) {
+      return Promise.resolve();
+    }
+    return this.apply(this.session, () => this.api.forget(items));
   }
 
   /**

@@ -269,9 +269,10 @@ const handlers: Record<string, (args: Args) => unknown> = {
         ...library.history.filter((w) => !same(item)(w)),
       ].slice(0, 200);
     }),
-  library_forget: ({ kind, id }) =>
+  library_forget: ({ items }) =>
     updateLibrary((library) => {
-      library.history = library.history.filter((w) => !same({ kind, id })(w));
+      const refs = items as { kind: string; id: string }[];
+      library.history = library.history.filter((w) => !refs.some((ref) => same(ref)(w)));
     }),
   library_set_categories: ({ catalogue, prefs }) =>
     updateLibrary((library) => {

@@ -22,6 +22,7 @@ describe('LibraryStore', () => {
       get: vi.fn().mockResolvedValue(library),
       setFavourite: vi.fn().mockResolvedValue(library),
       record: vi.fn().mockResolvedValue(library),
+      forget: vi.fn().mockResolvedValue(library),
     };
     TestBed.configureTestingModule({ providers: [{ provide: LibraryApi, useValue: api }] });
     return TestBed.inject(LibraryStore);
@@ -53,6 +54,23 @@ describe('LibraryStore', () => {
 
     expect(store.continueWatching().map((w) => w.id)).toEqual(['7']);
     expect(store.recentChannels().map((w) => w.kind)).toEqual(['live']);
+  });
+
+  it('clears only what is left to continue, in one call', async () => {
+    const finished = watched({ ...movie, id: '8' }, 5950, 6000);
+    const store = setup({
+      favourites: [],
+      history: [watched(channel, 0, 0), watched(movie, 1200, 6000), finished],
+      categories: {},
+    });
+    await store.load();
+
+    await store.forget([]);
+    expect(api['forget']).not.toHaveBeenCalled();
+
+    await store.forget(store.continueWatching());
+    expect(api['forget']).toHaveBeenCalledOnce();
+    expect(api['forget'].mock.calls[0][0].map((w: Watched) => w.id)).toEqual(['7']);
   });
 
   it('drops replies meant for the previous account', async () => {
