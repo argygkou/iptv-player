@@ -6,12 +6,13 @@
 //! browsers treat as a secure origin, builds the upstream URL from the signed-in
 //! session, forwards `Range` for seeking, and adds CORS headers.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use axum::Router;
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
-use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use serde::Deserialize;
@@ -40,6 +41,38 @@ pub async fn serve(listener: std::net::TcpListener, state: Arc<AppState>) {
     }
 }
 
+/// The status the panel last answered each relay path with, while it is a
+/// failure. mpv only reports that a stream failed to load, so this tells a
+/// playback error caused by a refused or missing stream (401, 404) from a
+/// network problem that is worth retrying.
+#[derive(Default)]
+pub struct UpstreamFailures(Mutex<HashMap<String, u16>>);
+
+impl UpstreamFailures {
+    /// Paths are only kept until they succeed, so this is only reached by
+    /// zapping through many failing channels; forgetting them all is fine.
+    const LIMIT: usize = 64;
+
+    fn record(&self, path: &str, status: StatusCode) {
+        let mut failures = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if status.is_success() {
+            failures.remove(path);
+            return;
+        }
+        if failures.len() >= Self::LIMIT {
+            failures.clear();
+        }
+        failures.insert(path.to_owned(), status.as_u16());
+    }
+
+    /// The failing status of the relay `path`, if its last request failed.
+    #[cfg_attr(not(native), allow(dead_code))]
+    pub fn status(&self, path: &str) -> Option<u16> {
+        let failures = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        failures.get(path).copied()
+    }
+}
+
 #[derive(Deserialize)]
 struct TokenQuery {
     t: String,
@@ -58,6 +91,7 @@ async fn relay(
     State(state): State<Arc<AppState>>,
     Path((kind, file)): Path<(String, String)>,
     Query(query): Query<TokenQuery>,
+    uri: Uri,
     headers: HeaderMap,
 ) -> Response {
     if query.t != state.proxy_token {
@@ -69,7 +103,8 @@ async fn relay(
     let Ok(creds) = state.credentials().await else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    forward(&state, creds.stream_url(kind, id, ext), &headers).await
+    let upstream = creds.stream_url(kind, id, ext);
+    forward(&state, upstream, uri.path(), &headers).await
 }
 
 /// Catch-up: a recorded stretch of a live channel.
@@ -77,6 +112,7 @@ async fn relay_timeshift(
     State(state): State<Arc<AppState>>,
     Path((duration, start, file)): Path<(String, String, String)>,
     Query(query): Query<TokenQuery>,
+    uri: Uri,
     headers: HeaderMap,
 ) -> Response {
     if query.t != state.proxy_token {
@@ -97,12 +133,14 @@ async fn relay_timeshift(
     forward(
         &state,
         creds.timeshift_url(duration, &start, id, ext),
+        uri.path(),
         &headers,
     )
     .await
 }
 
-async fn forward(state: &AppState, url: url::Url, headers: &HeaderMap) -> Response {
+/// Fetches `url` for the relay `path`, noting whether the panel served it.
+async fn forward(state: &AppState, url: url::Url, path: &str, headers: &HeaderMap) -> Response {
     let mut request = state.http.get(url);
     if let Some(range) = headers.get(header::RANGE) {
         request = request.header(header::RANGE, range);
@@ -111,9 +149,13 @@ async fn forward(state: &AppState, url: url::Url, headers: &HeaderMap) -> Respon
         Ok(response) => response,
         Err(err) => {
             log::warn!("upstream request failed: {err}");
+            state
+                .upstream_failures
+                .record(path, StatusCode::BAD_GATEWAY);
             return StatusCode::BAD_GATEWAY.into_response();
         }
     };
+    state.upstream_failures.record(path, upstream.status());
 
     let mut response = Response::builder().status(upstream.status());
     if let Some(out) = response.headers_mut() {
@@ -262,5 +304,24 @@ mod tests {
         );
         let response = client.get(bad_start).send().await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        // The fake panel has no live streams, so it answers 404, which playback
+        // errors can then report; a success clears what was noted.
+        let failures = &state.upstream_failures;
+        let missing = format!(
+            "http://127.0.0.1:{}/live/5.ts?t={}",
+            state.proxy_port, state.proxy_token
+        );
+        let response = client.get(missing).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(failures.status("/live/5.ts"), Some(404));
+        assert_eq!(failures.status("/movie/42.mp4"), None);
+        failures.record("/movie/42.mp4", StatusCode::SERVICE_UNAVAILABLE);
+        client
+            .get(format!("{base}?t={}", state.proxy_token))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(failures.status("/movie/42.mp4"), None);
     }
 }

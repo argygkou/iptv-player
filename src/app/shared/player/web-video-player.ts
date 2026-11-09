@@ -1,8 +1,20 @@
-import { Component, effect, ElementRef, input, signal, untracked, viewChild } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  effect,
+  ElementRef,
+  inject,
+  input,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
 import type Mpegts from 'mpegts.js';
 
 import { Progress } from '../../core/library/library.models';
 import { PROGRESS_INTERVAL } from './progress';
+import { StreamFailure, StreamRetry, WATCH_INTERVAL } from './stream-retry';
+import { StreamStatus } from './stream-status';
 
 /**
  * Fallback player for when libmpv is unavailable (mock mode, other platforms):
@@ -10,6 +22,7 @@ import { PROGRESS_INTERVAL } from './progress';
  * Chromium/WebView2 cannot play natively, so they go through mpegts.js (loaded
  * on demand). Movies and episodes use the native element; containers or codecs
  * the webview cannot decode (often MKV with AC3/DTS audio) surface as an error.
+ * Failed streams are retried like in the native player.
  */
 /**
  * IPTV panels deliver live TS in bursts, so the player needs a few seconds of
@@ -34,11 +47,16 @@ const LIVE_CONFIG: Mpegts.Config = {
 
 @Component({
   selector: 'app-web-video-player',
+  imports: [StreamStatus],
   template: `
     <video #video controls autoplay playsinline></video>
-    @if (error(); as message) {
-      <p class="error" role="alert">{{ message }}</p>
-    }
+    <div class="overlay">
+      <app-stream-status
+        [state]="retry.state()"
+        (stop)="retry.giveUp()"
+        (retry)="retry.retryNow()"
+      />
+    </div>
   `,
   styles: `
     :host {
@@ -50,13 +68,13 @@ const LIVE_CONFIG: Mpegts.Config = {
       width: 100%;
       height: 100%;
     }
-    .error {
+    .overlay {
       position: absolute;
-      inset: auto 0 0;
-      margin: 0;
-      padding: 0.75rem 1rem;
-      background: rgb(0 0 0 / 75%);
-      color: var(--danger);
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 1rem;
+      pointer-events: none;
     }
   `,
 })
@@ -68,20 +86,51 @@ export class WebVideoPlayer {
   /** Receives the position of a movie or episode while it plays and when it closes. */
   readonly onProgress = input<(progress: Progress) => void>();
 
-  protected readonly error = signal<string | null>(null);
   private readonly video = viewChild.required<ElementRef<HTMLVideoElement>>('video');
+  /** Bumped to reopen the stream: reopening the same URL is not a change of `src`. */
+  private readonly attempt = signal(0);
+  /** Where a movie or episode was when it last played, to reopen it there. */
+  private latest: number | null = null;
+  /** Set just before a retry of a movie or episode; read by the next open. */
+  private resumeFrom: number | null = null;
+  protected readonly retry = new StreamRetry(() => {
+    this.resumeFrom = this.live() ? null : this.latest;
+    this.attempt.update((n) => n + 1);
+  });
 
   constructor() {
+    let stream = '';
+    inject(DestroyRef).onDestroy(() => this.retry.dispose());
+
     effect((onCleanup) => {
       const element = this.video().nativeElement;
-      const src = this.src();
-      this.error.set(null);
+      const [src, live] = [this.src(), this.live()];
+      this.attempt();
+      if (`${live} ${src}` !== stream) {
+        stream = `${live} ${src}`;
+        this.latest = null;
+        this.retry.reset();
+      }
+      const fail = (failure: StreamFailure) => this.retry.fail(failure);
 
-      const onError = () => this.error.set(describeMediaError(element.error));
+      const onError = () => fail(describeMediaError(element.error));
+      const onPlaying = () => this.retry.started();
       element.addEventListener('error', onError);
-      onCleanup(() => element.removeEventListener('error', onError));
+      element.addEventListener('playing', onPlaying);
+      onCleanup(() => {
+        element.removeEventListener('error', onError);
+        element.removeEventListener('playing', onPlaying);
+      });
 
-      if (this.live()) {
+      const watch = setInterval(() => {
+        if (element.readyState > 0 && !element.paused) {
+          this.retry.watched(element.currentTime);
+          this.latest = live ? null : element.currentTime;
+        }
+      }, WATCH_INTERVAL);
+      onCleanup(() => clearInterval(watch));
+
+      if (live) {
         let player: Mpegts.Player | undefined;
         let disposed = false;
         void import('mpegts.js').then(({ default: mpegts }) => {
@@ -89,12 +138,23 @@ export class WebVideoPlayer {
             return;
           }
           if (!mpegts.getFeatureList().mseLivePlayback) {
-            this.error.set('Live MPEG-TS playback is not supported by this webview.');
+            fail({ message: 'live MPEG-TS is not supported by this webview', fatal: true });
             return;
           }
           player = mpegts.createPlayer({ type: 'mpegts', isLive: true, url: src }, LIVE_CONFIG);
-          player.on(mpegts.Events.ERROR, (type: string, detail: string) =>
-            this.error.set(`Playback error: ${type} (${detail})`),
+          const { ErrorDetails } = mpegts;
+          player.on(mpegts.Events.ERROR, (type: string, detail: string, info?: { code?: number }) =>
+            fail({
+              message: `${type}: ${detail}`,
+              status: detail === ErrorDetails.NETWORK_STATUS_CODE_INVALID ? info?.code : null,
+              fatal:
+                detail === ErrorDetails.MEDIA_FORMAT_UNSUPPORTED ||
+                detail === ErrorDetails.MEDIA_CODEC_UNSUPPORTED,
+            }),
+          );
+          // A live stream has no end; the panel closed it.
+          player.on(mpegts.Events.LOADING_COMPLETE, () =>
+            fail({ message: 'the live stream ended' }),
           );
           player.attachMediaElement(element);
           player.load();
@@ -105,7 +165,9 @@ export class WebVideoPlayer {
           player?.destroy();
         });
       } else {
-        const [start, report] = untracked(() => [this.start(), this.onProgress()] as const);
+        const [initial, report] = untracked(() => [this.start(), this.onProgress()] as const);
+        const start = this.resumeFrom ?? initial;
+        this.resumeFrom = null;
         if (start > 0) {
           const seek = () => (element.currentTime = start);
           element.addEventListener('loadedmetadata', seek, { once: true });
@@ -140,14 +202,24 @@ export class WebVideoPlayer {
   }
 }
 
-function describeMediaError(error: MediaError | null): string {
+/** Only network errors are worth another attempt. */
+function describeMediaError(error: MediaError | null): StreamFailure {
   switch (error?.code) {
     case MediaError.MEDIA_ERR_NETWORK:
-      return 'The stream could not be loaded from the provider.';
+      return { message: 'it could not be loaded from the provider' };
     case MediaError.MEDIA_ERR_DECODE:
+      return {
+        message: 'its format or codec is not supported by the built-in player yet',
+        fatal: true,
+      };
+    // Chromium reports a stream it could not fetch the same way as one it
+    // cannot decode, and an unsupported file fails every time.
     case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-      return 'This format or codec is not supported by the built-in player yet.';
+      return {
+        message: 'the built-in player could not load it or does not support its format',
+        fatal: true,
+      };
     default:
-      return 'Playback failed.';
+      return { message: 'playback failed' };
   }
 }

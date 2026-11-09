@@ -150,11 +150,13 @@ fn loadfile(url: &str, start: Option<f64>) -> Vec<String> {
     args
 }
 
-/// One `player_open` call: the id the webview gave it, and whether it is live.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// One `player_open` call: the id the webview gave it, whether it is live,
+/// and the relay path it plays, to look up how the panel answered.
+#[derive(Debug, Clone, PartialEq)]
 struct Entry {
     generation: u64,
     live: bool,
+    path: String,
 }
 
 /// Matches mpv's events to the `player_open` call they belong to, so an error
@@ -185,8 +187,14 @@ impl Tracker {
 
     /// What to tell the webview when the current file ends by itself. A movie
     /// reaching its end is normal; a live stream ending means it was lost.
-    fn ended(&self, error: Option<String>) -> Option<PlaybackError> {
-        let entry = (*lock(&self.current))?;
+    /// `status` gives the panel's failing HTTP status for a relay path.
+    fn ended(
+        &self,
+        error: Option<String>,
+        status: impl Fn(&str) -> Option<u16>,
+    ) -> Option<PlaybackError> {
+        let current = lock(&self.current);
+        let entry = current.as_ref()?;
         let message = match error {
             Some(message) => message,
             None if entry.live => "the live stream ended".into(),
@@ -195,6 +203,7 @@ impl Tracker {
         Some(PlaybackError {
             generation: entry.generation,
             message,
+            status: status(&entry.path),
         })
     }
 }
@@ -208,6 +217,8 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 struct PlaybackError {
     generation: u64,
     message: String,
+    /// The panel's HTTP status when it refused or failed to serve the stream.
+    status: Option<u16>,
 }
 
 /// Lazily created mpv instance and its window.
@@ -471,7 +482,8 @@ fn forward_events(
                     mpv::Ended::Eof => None,
                     mpv::Ended::Error(message) => Some(message),
                 };
-                if let Some(payload) = tracker.ended(error) {
+                let failures = &app.state::<Arc<AppState>>().upstream_failures;
+                if let Some(payload) = tracker.ended(error, |path| failures.status(path)) {
                     let _ = app.emit("player://error", payload);
                 }
             }
@@ -530,7 +542,14 @@ pub async fn player_open(
         .mpv
         .set_property("keep-open", if live { "no" } else { "yes" })
         .map_err(AppError::Playback)?;
-    native.tracker.queued(Entry { generation, live });
+    let path = url::Url::parse(&url)
+        .map(|url| url.path().to_owned())
+        .unwrap_or_default();
+    native.tracker.queued(Entry {
+        generation,
+        live,
+        path,
+    });
     let args = loadfile(&url, start);
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     if let Err(err) = native.mpv.command(&args) {
@@ -700,63 +719,89 @@ mod tests {
     fn tracker_with(entries: &[Entry]) -> Tracker {
         let tracker = Tracker::default();
         for entry in entries {
-            tracker.queued(*entry);
+            tracker.queued(entry.clone());
         }
         tracker
     }
 
-    const MOVIE: Entry = Entry {
-        generation: 1,
-        live: false,
-    };
-    const CHANNEL: Entry = Entry {
-        generation: 2,
-        live: true,
-    };
+    fn movie() -> Entry {
+        Entry {
+            generation: 1,
+            live: false,
+            path: "/movie/1.mkv".into(),
+        }
+    }
+
+    fn channel() -> Entry {
+        Entry {
+            generation: 2,
+            live: true,
+            path: "/live/2.ts".into(),
+        }
+    }
+
+    fn no_status(_path: &str) -> Option<u16> {
+        None
+    }
 
     #[test]
     fn errors_belong_to_the_file_that_was_playing() {
-        let tracker = tracker_with(&[MOVIE, CHANNEL]);
+        let tracker = tracker_with(&[movie(), channel()]);
         tracker.started();
         // The movie fails after the channel was already requested.
-        let error = tracker.ended(Some("loading failed".into()));
+        let error = tracker.ended(Some("loading failed".into()), no_status);
         assert_eq!(error.map(|e| e.generation), Some(1));
         tracker.started();
-        let error = tracker.ended(Some("loading failed".into()));
+        let error = tracker.ended(Some("loading failed".into()), no_status);
         assert_eq!(error.map(|e| e.generation), Some(2));
     }
 
     #[test]
     fn only_live_streams_report_their_end() {
-        let tracker = tracker_with(&[MOVIE, CHANNEL]);
+        let tracker = tracker_with(&[movie(), channel()]);
         tracker.started();
-        assert_eq!(tracker.ended(None), None);
+        assert_eq!(tracker.ended(None, no_status), None);
         tracker.started();
         assert_eq!(
-            tracker.ended(None),
+            tracker.ended(None, no_status),
             Some(PlaybackError {
                 generation: 2,
-                message: "the live stream ended".into()
+                message: "the live stream ended".into(),
+                status: None,
             })
         );
     }
 
     #[test]
+    fn errors_carry_the_panels_status() {
+        let tracker = tracker_with(&[movie()]);
+        tracker.started();
+        let status = |path: &str| (path == "/movie/1.mkv").then_some(404);
+        let error = tracker.ended(Some("loading failed".into()), status);
+        assert_eq!(error.and_then(|e| e.status), Some(404));
+    }
+
+    #[test]
     fn rejected_loads_are_forgotten() {
-        let tracker = tracker_with(&[MOVIE, CHANNEL]);
+        let tracker = tracker_with(&[movie(), channel()]);
         tracker.rejected();
         tracker.started();
         assert_eq!(
-            tracker.ended(Some("x".into())).map(|e| e.generation),
+            tracker
+                .ended(Some("x".into()), no_status)
+                .map(|e| e.generation),
             Some(1)
         );
         tracker.started();
-        assert_eq!(tracker.ended(Some("x".into())), None);
+        assert_eq!(tracker.ended(Some("x".into()), no_status), None);
     }
 
     #[test]
     fn nothing_is_reported_before_a_file_starts() {
-        assert_eq!(tracker_with(&[MOVIE]).ended(Some("x".into())), None);
+        assert_eq!(
+            tracker_with(&[movie()]).ended(Some("x".into()), no_status),
+            None
+        );
     }
 
     #[test]
