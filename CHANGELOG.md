@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/argygkou/iptv-player/compare/v0.3.0...v0.4.0) (2026-11-09)
+
+
+### Features
+
+* clear Continue watching and recently watched lists ([#23](https://github.com/argygkou/iptv-player/issues/23)) ([ab14acd](https://github.com/argygkou/iptv-player/commit/ab14acda21ed4d70073a78011a0d83723a5c295b))
+
 ## [0.3.0](https://github.com/argygkou/iptv-player/compare/v0.2.1...v0.3.0) (2026-11-09)
 
 
